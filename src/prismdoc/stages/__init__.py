@@ -8,6 +8,13 @@ from prismdoc.stages.cascade import (
     text_length,
 )
 from prismdoc.stages.extract import ExtractStage, LLMClient, LiteLLMClient
+from prismdoc.stages.figures import (
+    Figure,
+    FigureExtractStage,
+    FigureMergeStage,
+    FigureProcessStage,
+    FigureProcessor,
+)
 from prismdoc.stages.ingest import IngestStage, Loader
 from prismdoc.stages.normalize import NormalizeStage
 from prismdoc.stages.parse import ParseStage, Parser, PassthroughParser
@@ -18,6 +25,11 @@ __all__ = [
     "CascadeStage",
     "Context",
     "ExtractStage",
+    "Figure",
+    "FigureExtractStage",
+    "FigureMergeStage",
+    "FigureProcessStage",
+    "FigureProcessor",
     "IngestStage",
     "LLMClient",
     "LiteLLMClient",

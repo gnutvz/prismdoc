@@ -1,0 +1,18 @@
+schema:
+  fields:
+    - {name: name, type: string, required: true}
+    - {name: sku, type: string}
+    - {name: price, type: number}
+    - {name: currency, type: string}
+    - {name: unit, type: string}
+    - {name: brand, type: string}
+    - {name: category, type: string}
+pipeline:
+  - ingest.default
+  - parse.default
+  - figures.extract
+  - figures.process
+  - figures.merge
+  - extract.table
+  - validate.default
+  - normalize.default

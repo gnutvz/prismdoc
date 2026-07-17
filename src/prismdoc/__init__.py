@@ -13,6 +13,13 @@ from prismdoc.schema import FieldSpec, TargetSchema
 from prismdoc.stages.base import Context, Stage
 from prismdoc.stages.cascade import CascadeStage, get_scorer, register_scorer
 from prismdoc.stages.extract import ExtractStage, LLMClient
+from prismdoc.stages.figures import (
+    Figure,
+    FigureExtractStage,
+    FigureMergeStage,
+    FigureProcessStage,
+    FigureProcessor,
+)
 from prismdoc.stages.ingest import IngestStage, Loader
 from prismdoc.stages.normalize import NormalizeStage
 from prismdoc.stages.parse import ParseStage, Parser, PassthroughParser
@@ -28,6 +35,11 @@ __all__ = [
     "Document",
     "ExtractStage",
     "FieldSpec",
+    "Figure",
+    "FigureExtractStage",
+    "FigureMergeStage",
+    "FigureProcessStage",
+    "FigureProcessor",
     "IngestStage",
     "LLMClient",
     "Loader",
