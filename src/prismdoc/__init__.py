@@ -7,7 +7,9 @@ from prismdoc.schema import FieldSpec, TargetSchema
 from prismdoc.stages.base import Context, Stage
 from prismdoc.stages.extract import ExtractStage, LLMClient
 from prismdoc.stages.ingest import IngestStage, Loader
+from prismdoc.stages.normalize import NormalizeStage
 from prismdoc.stages.parse import ParseStage, Parser, PassthroughParser
+from prismdoc.stages.validate import ValidateStage
 
 __version__ = "0.0.0"
 
@@ -20,6 +22,7 @@ __all__ = [
     "IngestStage",
     "LLMClient",
     "Loader",
+    "NormalizeStage",
     "Page",
     "ParseStage",
     "Parser",
@@ -29,6 +32,7 @@ __all__ = [
     "Source",
     "Stage",
     "TargetSchema",
+    "ValidateStage",
     "registry",
     "__version__",
     "hello",
