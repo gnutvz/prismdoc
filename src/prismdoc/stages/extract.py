@@ -39,6 +39,7 @@ class Completion(BaseModel):
     text: str
     usage: dict[str, int] | None = None
     model: str | None = None
+    attempts: int = 0
 
 
 class LLMClient(ABC):
@@ -79,7 +80,7 @@ def _transient_exception_types() -> tuple[type[BaseException], ...] | None:
 def _is_transient(exc: BaseException) -> bool:
     types = _transient_exception_types()
     if types is None:
-        return not isinstance(exc, (ValueError, TypeError))
+        return isinstance(exc, (ConnectionError, TimeoutError))
     return isinstance(exc, types)
 
 
@@ -93,12 +94,14 @@ class LiteLLMClient(LLMClient):
         timeout: float = 60.0,
         max_retries: int = 2,
         backoff_base: float = 0.5,
+        jitter: float = 0.5,
         **opts: Any,
     ) -> None:
         self.model = model
         self.timeout = timeout
         self.max_retries = max_retries
         self.backoff_base = backoff_base
+        self.jitter = jitter
         self.opts = opts
 
     def complete(
@@ -120,11 +123,19 @@ class LiteLLMClient(LLMClient):
                 **kwargs,
             )
 
+        attempts = 0
+
+        def _on_retry(attempt: int, _exc: BaseException) -> None:
+            nonlocal attempts
+            attempts = attempt + 1
+
         response = with_retry(
             _call,
             max_retries=self.max_retries,
             backoff_base=self.backoff_base,
+            jitter=self.jitter,
             retry_on=_is_transient,
+            on_retry=_on_retry,
         )
         usage_obj = getattr(response, "usage", None)
         usage: dict[str, int] | None = None
@@ -138,7 +149,9 @@ class LiteLLMClient(LLMClient):
         content = response.choices[0].message.content
         if content is None:
             raise ValueError("litellm returned empty message content")
-        return Completion(text=str(content), usage=usage, model=self.model)
+        return Completion(
+            text=str(content), usage=usage, model=self.model, attempts=attempts
+        )
 
 
 class ExtractStage(Stage):
@@ -194,6 +207,7 @@ class ExtractStage(Stage):
             },
         }
         completion = self.client.complete(prompt, response_format=response_format)
+        doc.artifacts.setdefault("llm", {})["attempts"] = completion.attempts
         model_name = str(
             completion.model
             or getattr(self.client, "model", None)
