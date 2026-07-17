@@ -23,6 +23,7 @@ from prismdoc import (
     ValidateStage,
     registry,
 )
+from prismdoc.stages.extract import Completion
 from prismdoc.stages.normalize import register_plugins as register_normalize
 from prismdoc.stages.validate import register_plugins as register_validate
 
@@ -33,8 +34,8 @@ class FakeLLMClient(LLMClient):
     def __init__(self, response: str) -> None:
         self.response = response
 
-    def complete(self, prompt: str) -> str:
-        return self.response
+    def complete(self, prompt: str) -> Completion:
+        return Completion(text=self.response)
 
 
 def _schema() -> TargetSchema:

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import fitz
+import prismdoc
 import pytest
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
@@ -25,6 +26,7 @@ from prismdoc import (
     ValidateStage,
 )
 from prismdoc.api.app import app, get_runtime
+from prismdoc.stages.extract import Completion
 
 _CANNED = [
     {
@@ -42,8 +44,8 @@ class FakeLLMClient(LLMClient):
     def __init__(self, response: str) -> None:
         self.response = response
 
-    def complete(self, prompt: str) -> str:
-        return self.response
+    def complete(self, prompt: str) -> Completion:
+        return Completion(text=self.response)
 
 
 class BoomStage(Stage):
@@ -204,3 +206,41 @@ def test_app_exported_from_prismdoc_api() -> None:
 
     assert exported_app is app
     assert exported_get_runtime is get_runtime
+
+
+def test_app_version_matches_package() -> None:
+    assert app.version == prismdoc.__version__
+
+
+def test_get_runtime_raises_when_config_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("PRISMDOC_CONFIG", raising=False)
+    get_runtime.cache_clear()
+    try:
+        with pytest.raises(RuntimeError, match="PRISMDOC_CONFIG is not set"):
+            get_runtime()
+    finally:
+        get_runtime.cache_clear()
+
+
+def test_get_runtime_returns_cached_instance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = Path(__file__).resolve().parents[1]
+    config_path = repo / "examples" / "retail" / "pipeline.yaml"
+    monkeypatch.setenv("PRISMDOC_CONFIG", str(config_path))
+    get_runtime.cache_clear()
+    try:
+        first = get_runtime()
+        second = get_runtime()
+        assert first is second
+    finally:
+        get_runtime.cache_clear()
+
+
+def test_health_ok_without_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("PRISMDOC_CONFIG", raising=False)
+    get_runtime.cache_clear()
+    client = TestClient(app)
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}

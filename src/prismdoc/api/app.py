@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import os
 import tempfile
 from pathlib import Path
@@ -9,28 +10,30 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 
+from prismdoc import __version__
 from prismdoc.config import load_pipeline
 from prismdoc.models import Document, Source
 from prismdoc.pipeline import Pipeline
 from prismdoc.stages.base import Context
 
-_DEFAULT_CONFIG = "examples/retail/pipeline.yaml"
-
 app = FastAPI(
     title="prismdoc",
     description="Schema-driven document extraction microservice",
-    version="0.0.0",
+    version=__version__,
 )
 
 
+@functools.lru_cache(maxsize=1)
 def get_runtime() -> tuple[Pipeline, Context]:
     """Build ``(Pipeline, Context)`` from server-side YAML config.
 
-    Default config is ``examples/retail/pipeline.yaml``; override with the
-    ``PRISMDOC_CONFIG`` environment variable. Declared as a FastAPI dependency
-    so tests can inject a fake-LLM pipeline via ``app.dependency_overrides``.
+    Reads ``PRISMDOC_CONFIG`` (required). The result is cached so repeated
+    requests reuse one pipeline instance. Declared as a FastAPI dependency so
+    tests can inject a fake-LLM pipeline via ``app.dependency_overrides``.
     """
-    config_path = os.environ.get("PRISMDOC_CONFIG", _DEFAULT_CONFIG)
+    config_path = os.environ.get("PRISMDOC_CONFIG")
+    if not config_path:
+        raise RuntimeError("PRISMDOC_CONFIG is not set")
     return load_pipeline(config_path)
 
 

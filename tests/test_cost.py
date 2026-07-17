@@ -21,6 +21,7 @@ from prismdoc import (
     record_cost,
 )
 from prismdoc.cost import PRICING, check_budget
+from prismdoc.stages.extract import Completion
 from prismdoc.eval.dataset import load_dataset
 from prismdoc.eval.runner import run_eval
 
@@ -54,14 +55,16 @@ class UsageLLMClient(LLMClient):
         self.completion_tokens = completion_tokens
         if model is not None:
             self.model = model
-        self.last_usage: dict[str, int] | None = None
 
-    def complete(self, prompt: str) -> str:
-        self.last_usage = {
-            "prompt_tokens": self.prompt_tokens,
-            "completion_tokens": self.completion_tokens,
-        }
-        return self.response
+    def complete(self, prompt: str) -> Completion:
+        return Completion(
+            text=self.response,
+            usage={
+                "prompt_tokens": self.prompt_tokens,
+                "completion_tokens": self.completion_tokens,
+            },
+            model=getattr(self, "model", None),
+        )
 
 
 def test_estimate_cost_known_model() -> None:
@@ -91,7 +94,7 @@ def test_estimate_cost_unknown_model_uses_default() -> None:
     )
 
 
-def test_extract_stage_records_cost_from_last_usage() -> None:
+def test_extract_stage_records_cost_from_completion_usage() -> None:
     doc = Document(
         source=Source(path="/tmp/catalog.md"),
         pages=[Page(index=0, text="Widget W-1 9.99")],
@@ -165,8 +168,8 @@ def test_extract_stage_surfaces_budget_exceeded() -> None:
 
 def test_extract_without_usage_records_no_cost() -> None:
     class NoUsageClient(LLMClient):
-        def complete(self, prompt: str) -> str:
-            return json.dumps(_CANNED)
+        def complete(self, prompt: str) -> Completion:
+            return Completion(text=json.dumps(_CANNED))
 
     doc = Document(
         source=Source(path="/tmp/catalog.md"),

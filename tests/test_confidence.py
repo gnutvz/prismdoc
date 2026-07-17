@@ -26,6 +26,7 @@ from prismdoc import (
     registry,
 )
 from prismdoc.stages.confidence import register_plugins as register_confidence
+from prismdoc.stages.extract import Completion
 
 
 class FakeLLMClient(LLMClient):
@@ -34,8 +35,8 @@ class FakeLLMClient(LLMClient):
     def __init__(self, response: str) -> None:
         self.response = response
 
-    def complete(self, prompt: str) -> str:
-        return self.response
+    def complete(self, prompt: str) -> Completion:
+        return Completion(text=self.response)
 
 
 def _schema() -> TargetSchema:

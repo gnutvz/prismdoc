@@ -11,7 +11,7 @@ from prismdoc.eval.dataset import EvalCase, EvalDataset, load_dataset
 from prismdoc.eval.metrics import align_records, field_metrics
 from prismdoc.eval.runner import run_eval
 from prismdoc.schema import FieldSpec, TargetSchema
-from prismdoc.stages.extract import LLMClient
+from prismdoc.stages.extract import Completion, LLMClient
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _RETAIL_DATASET = _REPO_ROOT / "examples" / "eval" / "retail_dataset.json"
@@ -124,8 +124,8 @@ def test_run_eval_mock_llm_wrong_field_matches_error(tmp_path: Path) -> None:
     predicted_payload = [{"name": "Widget", "sku": "W-1", "price": 9.99}]
 
     class FakeClient(LLMClient):
-        def complete(self, prompt: str) -> str:
-            return json.dumps(predicted_payload)
+        def complete(self, prompt: str) -> Completion:
+            return Completion(text=json.dumps(predicted_payload))
 
     config = {
         "schema": {

@@ -22,7 +22,7 @@ from prismdoc import (
     TargetSchema,
     registry,
 )
-from prismdoc.stages.extract import LiteLLMClient, register_plugins
+from prismdoc.stages.extract import Completion, LiteLLMClient, register_plugins
 
 _CANNED_PRODUCTS = [
     {
@@ -47,9 +47,9 @@ class FakeLLMClient(LLMClient):
         self.response = response
         self.prompts: list[str] = []
 
-    def complete(self, prompt: str) -> str:
+    def complete(self, prompt: str) -> Completion:
         self.prompts.append(prompt)
-        return self.response
+        return Completion(text=self.response)
 
 
 def _product_schema() -> TargetSchema:

@@ -7,6 +7,8 @@ import re
 from abc import ABC, abstractmethod
 from typing import Any
 
+from pydantic import BaseModel
+
 from prismdoc.cost import check_budget, record_cost
 from prismdoc.models import Document, Record
 from prismdoc.registry import register
@@ -22,15 +24,20 @@ _FENCE_RE = re.compile(
 )
 
 
+class Completion(BaseModel):
+    """Stateless LLM completion result (text + optional usage metadata)."""
+
+    text: str
+    usage: dict[str, int] | None = None
+    model: str | None = None
+
+
 class LLMClient(ABC):
     """Minimal interface for prompt completion (injectable for offline tests)."""
 
-    # Implementations set this after ``complete`` when usage is available.
-    last_usage: dict[str, int] | None = None
-
     @abstractmethod
-    def complete(self, prompt: str) -> str:
-        """Return the model response text for ``prompt``."""
+    def complete(self, prompt: str) -> Completion:
+        """Return the model response for ``prompt``."""
         ...
 
 
@@ -78,9 +85,8 @@ class LiteLLMClient(LLMClient):
         self.max_retries = max_retries
         self.backoff_base = backoff_base
         self.opts = opts
-        self.last_usage: dict[str, int] | None = None
 
-    def complete(self, prompt: str) -> str:
+    def complete(self, prompt: str) -> Completion:
         try:
             import litellm
         except ImportError as exc:
@@ -100,20 +106,19 @@ class LiteLLMClient(LLMClient):
             backoff_base=self.backoff_base,
             retry_on=_is_transient,
         )
-        usage = getattr(response, "usage", None)
-        if usage is not None:
-            self.last_usage = {
-                "prompt_tokens": int(getattr(usage, "prompt_tokens", 0) or 0),
+        usage_obj = getattr(response, "usage", None)
+        usage: dict[str, int] | None = None
+        if usage_obj is not None:
+            usage = {
+                "prompt_tokens": int(getattr(usage_obj, "prompt_tokens", 0) or 0),
                 "completion_tokens": int(
-                    getattr(usage, "completion_tokens", 0) or 0
+                    getattr(usage_obj, "completion_tokens", 0) or 0
                 ),
             }
-        else:
-            self.last_usage = None
         content = response.choices[0].message.content
         if content is None:
             raise ValueError("litellm returned empty message content")
-        return str(content)
+        return Completion(text=str(content), usage=usage, model=self.model)
 
 
 class ExtractStage(Stage):
@@ -137,11 +142,14 @@ class ExtractStage(Stage):
     def run(self, doc: Document, ctx: Context) -> Document:
         text = doc.artifacts.get("parsed_markdown") or doc.full_text
         prompt = _build_prompt(str(text), self.schema)
-        raw = self.client.complete(prompt)
-        usage = self.client.last_usage
+        completion = self.client.complete(prompt)
+        usage = completion.usage
         if usage is not None:
             model_name = (
-                getattr(self.client, "model", None) or self.model or "default"
+                completion.model
+                or getattr(self.client, "model", None)
+                or self.model
+                or "default"
             )
             record_cost(
                 doc,
@@ -153,7 +161,7 @@ class ExtractStage(Stage):
             budget = ctx.options.get("budget_usd")
             if budget is not None:
                 check_budget(doc, float(budget))
-        parsed = _parse_records_json(raw)
+        parsed = _parse_records_json(completion.text)
         doc.records = [Record(fields=obj) for obj in parsed]
         return doc
 
