@@ -17,6 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff"]
+docling = ["docling"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/prismdoc"]
