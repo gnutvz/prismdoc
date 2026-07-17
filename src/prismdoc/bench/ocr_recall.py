@@ -11,11 +11,18 @@ _NUMBER_TOKEN_RE = re.compile(r"\d+(?:\.\d+)?")
 _NUMERIC_LOOKING_RE = re.compile(
     r"^[\s$€£¥₹]*(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?[\s$€£¥₹]*$"
 )
+# Split on whitespace and punctuation; keep alphanumeric runs.
+_TOKEN_RE = re.compile(r"[a-z0-9]+")
 
 
 def _normalize(s: str) -> str:
     """Lowercase, collapse whitespace, strip."""
     return _WHITESPACE_RE.sub(" ", s.lower()).strip()
+
+
+def _tokens(s: str) -> list[str]:
+    """Significant tokens: lowercase, split on whitespace/punctuation, drop len <= 2."""
+    return [t for t in _TOKEN_RE.findall(s.lower()) if len(t) > 2]
 
 
 def _looks_numeric(value: str) -> bool:
@@ -69,10 +76,37 @@ def value_found(value: str, text: str) -> bool:
     return False
 
 
+def token_recall(value: str, text: str) -> float:
+    """Fraction of ``value``'s significant tokens present in ``text``.
+
+    Uses normalized text. Returns 0.0 when ``value`` has no significant tokens.
+    """
+    value_tokens = _tokens(value)
+    if not value_tokens:
+        return 0.0
+    text_token_set = set(_tokens(_normalize(text)))
+    hits = sum(1 for t in value_tokens if t in text_token_set)
+    return hits / len(value_tokens)
+
+
 def sample_recall(ocr_text: str, fields: dict[str, str]) -> dict[str, Any]:
-    """Per-field ``found`` flags plus the fraction of fields found in the sample."""
-    found: dict[str, bool] = {
-        name: value_found(value, ocr_text) for name, value in fields.items()
+    """Per-field exact + token recall, plus sample-level mean exact / mean token."""
+    per_field: dict[str, dict[str, bool | float]] = {
+        name: {
+            "exact": value_found(value, ocr_text),
+            "token": token_recall(value, ocr_text),
+        }
+        for name, value in fields.items()
     }
-    fraction = (sum(found.values()) / len(found)) if found else 0.0
-    return {"found": found, "fraction": fraction}
+    n = len(per_field)
+    mean_exact = (
+        sum(bool(v["exact"]) for v in per_field.values()) / n if n else 0.0
+    )
+    mean_token = (
+        sum(float(v["token"]) for v in per_field.values()) / n if n else 0.0
+    )
+    return {
+        "per_field": per_field,
+        "mean_exact": mean_exact,
+        "mean_token": mean_token,
+    }

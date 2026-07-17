@@ -60,7 +60,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def _print_report(report: BenchReport, *, file: TextIO) -> None:
     print(f"n_samples: {report.n_samples}", file=file)
-    print(f"overall_recall: {report.overall_recall:.4f}", file=file)
+    print(f"overall_exact: {report.overall_exact:.4f}", file=file)
+    print(f"overall_token: {report.overall_token:.4f}", file=file)
     print(file=file)
 
     if not report.per_field:
@@ -68,12 +69,23 @@ def _print_report(report: BenchReport, *, file: TextIO) -> None:
         return
 
     name_w = max(len("field"), max(len(n) for n in report.per_field))
-    recall_w = len("recall")
-    print(f"{'field'.ljust(name_w)}  {'recall'.rjust(recall_w)}", file=file)
-    print(f"{'-' * name_w}  {'-' * recall_w}", file=file)
-    for name, recall in report.per_field.items():
+    exact_w = len("exact")
+    token_w = len("token")
+    print(
+        f"{'field'.ljust(name_w)}  "
+        f"{'exact'.rjust(exact_w)}  "
+        f"{'token'.rjust(token_w)}",
+        file=file,
+    )
+    print(
+        f"{'-' * name_w}  {'-' * exact_w}  {'-' * token_w}",
+        file=file,
+    )
+    for name, metrics in report.per_field.items():
         print(
-            f"{name.ljust(name_w)}  {recall:>{recall_w}.4f}",
+            f"{name.ljust(name_w)}  "
+            f"{metrics.exact_recall:>{exact_w}.4f}  "
+            f"{metrics.token_recall:>{token_w}.4f}",
             file=file,
         )
 

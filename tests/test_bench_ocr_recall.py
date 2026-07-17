@@ -1,4 +1,4 @@
-"""Tests for T-023 SROIE OCR-recall benchmark harness."""
+"""Tests for SROIE OCR-recall benchmark harness (exact + token-overlap)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import pytest
 from PIL import Image
 
 from prismdoc.bench.dataset import load_manifest
-from prismdoc.bench.ocr_recall import sample_recall, value_found
+from prismdoc.bench.ocr_recall import sample_recall, token_recall, value_found
 from prismdoc.bench.runner import run_ocr_recall
 from prismdoc.models import Document
 from prismdoc.stages.parse import Parser
@@ -51,6 +51,17 @@ def test_value_found_absent() -> None:
     assert value_found("99.99", text) is False
 
 
+def test_token_recall_all_half_none_and_short() -> None:
+    text = "jalan sagu taman daya sdn bhd receipt"
+    assert token_recall("JALAN SAGU TAMAN DAYA", text) == pytest.approx(1.0)
+    assert token_recall("JALAN SAGU MISSING STREET", text) == pytest.approx(0.5)
+    assert token_recall("UNKNOWN MISSING CORP", text) == pytest.approx(0.0)
+    # No significant tokens (all length <= 2): "12.5" -> 12, 5; "ab cd" -> ab, cd
+    assert token_recall("12.5", text) == pytest.approx(0.0)
+    assert token_recall("ab cd", text) == pytest.approx(0.0)
+    assert token_recall("", text) == pytest.approx(0.0)
+
+
 def test_sample_recall_mixed_fields() -> None:
     text = "ACME STORE\nDate 01/01/2020\nTotal 12.50"
     result = sample_recall(
@@ -62,13 +73,16 @@ def test_sample_recall_mixed_fields() -> None:
             "total": "12.5",
         },
     )
-    assert result["found"] == {
-        "company": True,
-        "date": True,
-        "address": False,
-        "total": True,
-    }
-    assert result["fraction"] == pytest.approx(0.75)
+    assert result["per_field"]["company"]["exact"] is True
+    assert result["per_field"]["company"]["token"] == pytest.approx(1.0)
+    assert result["per_field"]["date"]["exact"] is True
+    assert result["per_field"]["date"]["token"] == pytest.approx(1.0)
+    assert result["per_field"]["address"]["exact"] is False
+    assert result["per_field"]["address"]["token"] == pytest.approx(0.0)
+    assert result["per_field"]["total"]["exact"] is True
+    assert result["per_field"]["total"]["token"] == pytest.approx(0.0)
+    assert result["mean_exact"] == pytest.approx(0.75)
+    assert result["mean_token"] == pytest.approx(0.5)
 
 
 def test_load_manifest_resolves_relative_image_paths(tmp_path: Path) -> None:
@@ -130,8 +144,10 @@ def test_run_ocr_recall_fake_parser_synthetic_manifest(tmp_path: Path) -> None:
     )
 
     samples = load_manifest(manifest)
-    # Sample A: company+date+total present (address missing); 3/4
-    # Sample B: company+address present (date+total missing); 2/4
+    # Sample A: company+date+total exact (address missing); mean_exact 0.75
+    #   token: company 1.0, date 1.0, address 0.5 (alpha only), total 0.0 -> 0.625
+    # Sample B: company+address exact; mean_exact 0.5
+    #   token: company 1.0, date 0.0, address 1.0, total 0.0 -> 0.5
     canned = {
         samples[0].image_path: (
             "ALPHA CO\nDate 01/02/2019\nPaid TOTAL 10.50\n(no address line)"
@@ -144,9 +160,13 @@ def test_run_ocr_recall_fake_parser_synthetic_manifest(tmp_path: Path) -> None:
     report = run_ocr_recall(samples, _CannedParser(canned))
 
     assert report.n_samples == 2
-    assert report.per_field["company"] == pytest.approx(1.0)
-    assert report.per_field["date"] == pytest.approx(0.5)
-    assert report.per_field["address"] == pytest.approx(0.5)
-    assert report.per_field["total"] == pytest.approx(0.5)
-    # mean of sample fractions: (0.75 + 0.5) / 2
-    assert report.overall_recall == pytest.approx(0.625)
+    assert report.per_field["company"].exact_recall == pytest.approx(1.0)
+    assert report.per_field["company"].token_recall == pytest.approx(1.0)
+    assert report.per_field["date"].exact_recall == pytest.approx(0.5)
+    assert report.per_field["date"].token_recall == pytest.approx(0.5)
+    assert report.per_field["address"].exact_recall == pytest.approx(0.5)
+    assert report.per_field["address"].token_recall == pytest.approx(0.75)
+    assert report.per_field["total"].exact_recall == pytest.approx(0.5)
+    assert report.per_field["total"].token_recall == pytest.approx(0.0)
+    assert report.overall_exact == pytest.approx(0.625)
+    assert report.overall_token == pytest.approx(0.5625)

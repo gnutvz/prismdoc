@@ -13,12 +13,20 @@ from prismdoc.stages.ingest import IngestStage
 from prismdoc.stages.parse import ParseStage, Parser
 
 
+class FieldRecall(BaseModel):
+    """Per-field aggregated exact and token-overlap recall."""
+
+    exact_recall: float
+    token_recall: float
+
+
 class BenchReport(BaseModel):
     """Aggregated OCR-recall metrics over a sample set."""
 
     n_samples: int
-    per_field: dict[str, float] = Field(default_factory=dict)
-    overall_recall: float = 0.0
+    per_field: dict[str, FieldRecall] = Field(default_factory=dict)
+    overall_exact: float = 0.0
+    overall_token: float = 0.0
 
 
 def run_ocr_recall(samples: list[BenchSample], parser: Parser) -> BenchReport:
@@ -30,32 +38,49 @@ def run_ocr_recall(samples: list[BenchSample], parser: Parser) -> BenchReport:
     pipeline = Pipeline([IngestStage(), ParseStage(parser=parser)])
     ctx = Context()
 
-    field_hits: dict[str, int] = {}
+    field_exact_hits: dict[str, int] = {}
+    field_token_sums: dict[str, float] = {}
     field_totals: dict[str, int] = {}
-    sample_fractions: list[float] = []
+    sample_mean_exacts: list[float] = []
+    sample_mean_tokens: list[float] = []
 
     for sample in samples:
         doc = Document(source=Source(path=sample.image_path))
         doc = pipeline.run(doc, ctx)
         ocr_text = str(doc.artifacts.get("parsed_markdown") or "")
         result = sample_recall(ocr_text, sample.fields)
-        found = result["found"]
-        sample_fractions.append(float(result["fraction"]))
-        for name, ok in found.items():
+        per_field = result["per_field"]
+        sample_mean_exacts.append(float(result["mean_exact"]))
+        sample_mean_tokens.append(float(result["mean_token"]))
+        for name, metrics in per_field.items():
             field_totals[name] = field_totals.get(name, 0) + 1
-            if ok:
-                field_hits[name] = field_hits.get(name, 0) + 1
+            if metrics["exact"]:
+                field_exact_hits[name] = field_exact_hits.get(name, 0) + 1
+            field_token_sums[name] = (
+                field_token_sums.get(name, 0.0) + float(metrics["token"])
+            )
 
     n_samples = len(samples)
-    per_field = {
-        name: (field_hits.get(name, 0) / total) if total else 0.0
+    per_field_report = {
+        name: FieldRecall(
+            exact_recall=(
+                (field_exact_hits.get(name, 0) / total) if total else 0.0
+            ),
+            token_recall=(
+                (field_token_sums.get(name, 0.0) / total) if total else 0.0
+            ),
+        )
         for name, total in field_totals.items()
     }
-    overall_recall = (
-        sum(sample_fractions) / n_samples if n_samples else 0.0
+    overall_exact = (
+        sum(sample_mean_exacts) / n_samples if n_samples else 0.0
+    )
+    overall_token = (
+        sum(sample_mean_tokens) / n_samples if n_samples else 0.0
     )
     return BenchReport(
         n_samples=n_samples,
-        per_field=per_field,
-        overall_recall=overall_recall,
+        per_field=per_field_report,
+        overall_exact=overall_exact,
+        overall_token=overall_token,
     )
