@@ -17,7 +17,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "ruff"]
+api = ["fastapi", "uvicorn[standard]", "python-multipart"]
+dev = [
+    "pytest",
+    "ruff",
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "httpx",
+]
 docling = ["docling"]
 llm = ["litellm"]
 
