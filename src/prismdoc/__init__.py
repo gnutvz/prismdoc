@@ -1,6 +1,7 @@
 """prismdoc — cost-aware, schema-driven document extraction pipeline."""
 
 from prismdoc import registry
+from prismdoc.config import build_pipeline, load_pipeline
 from prismdoc.models import Block, Document, Page, Record, Source
 from prismdoc.pipeline import Pipeline
 from prismdoc.schema import FieldSpec, TargetSchema
@@ -33,6 +34,8 @@ __all__ = [
     "Stage",
     "TargetSchema",
     "ValidateStage",
+    "build_pipeline",
+    "load_pipeline",
     "registry",
     "__version__",
     "hello",

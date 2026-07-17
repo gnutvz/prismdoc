@@ -6,16 +6,14 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 from prismdoc.models import Document
+from prismdoc.schema import TargetSchema
 
 
 @dataclass
 class Context:
-    """Shared runtime config for a pipeline run.
+    """Shared runtime config for a pipeline run."""
 
-    ``target_schema`` is a placeholder until T-004 introduces a typed schema.
-    """
-
-    target_schema: dict | None = None
+    target_schema: TargetSchema | None = None
     options: dict = field(default_factory=dict)
 
 

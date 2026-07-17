@@ -15,19 +15,27 @@ def register(key: str, factory: _RegistryFactory) -> None:
     _REGISTRY[key] = factory
 
 
+def get_factory(key: str) -> _RegistryFactory:
+    """Return the registered factory for ``key``.
+
+    Raises:
+        KeyError: if ``key`` is not registered.
+    """
+    try:
+        return _REGISTRY[key]
+    except KeyError as exc:
+        raise KeyError(
+            f"Unknown stage key {key!r}; registered: {sorted(_REGISTRY)}"
+        ) from exc
+
+
 def create(key: str, **kwargs: Any) -> Any:
     """Instantiate an object from a registered factory.
 
     Raises:
         KeyError: if ``key`` is not registered.
     """
-    try:
-        factory = _REGISTRY[key]
-    except KeyError as exc:
-        raise KeyError(
-            f"Unknown stage key {key!r}; registered: {sorted(_REGISTRY)}"
-        ) from exc
-    return factory(**kwargs)
+    return get_factory(key)(**kwargs)
 
 
 def get_keys() -> list[str]:

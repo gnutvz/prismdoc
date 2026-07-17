@@ -62,9 +62,13 @@ class ExtractStage(Stage):
         self,
         schema: TargetSchema,
         client: LLMClient | None = None,
+        model: str = "gpt-4o-mini",
+        **opts: Any,
     ) -> None:
         self.schema = schema
-        self.client = client if client is not None else LiteLLMClient()
+        self.client = (
+            client if client is not None else LiteLLMClient(model=model, **opts)
+        )
 
     def run(self, doc: Document, ctx: Context) -> Document:
         text = doc.artifacts.get("parsed_markdown") or doc.full_text
