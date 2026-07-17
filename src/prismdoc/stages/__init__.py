@@ -1,6 +1,12 @@
 """Pipeline stages package."""
 
 from prismdoc.stages.base import Context, Stage
+from prismdoc.stages.cascade import (
+    CascadeStage,
+    get_scorer,
+    register_scorer,
+    text_length,
+)
 from prismdoc.stages.extract import ExtractStage, LLMClient, LiteLLMClient
 from prismdoc.stages.ingest import IngestStage, Loader
 from prismdoc.stages.normalize import NormalizeStage
@@ -9,6 +15,7 @@ from prismdoc.stages.table_extract import TableExtractStage
 from prismdoc.stages.validate import ValidateStage
 
 __all__ = [
+    "CascadeStage",
     "Context",
     "ExtractStage",
     "IngestStage",
@@ -22,4 +29,7 @@ __all__ = [
     "Stage",
     "TableExtractStage",
     "ValidateStage",
+    "get_scorer",
+    "register_scorer",
+    "text_length",
 ]

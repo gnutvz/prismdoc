@@ -77,6 +77,8 @@ def register_plugins() -> None:
     register("parser.passthrough", PassthroughParser)
     register("parser.docling", DoclingParser)
     register("parse.default", ParseStage)
+    register("parse.passthrough", lambda: ParseStage(parser=PassthroughParser()))
+    register("parse.docling", lambda: ParseStage(parser=DoclingParser()))
 
 
 register_plugins()

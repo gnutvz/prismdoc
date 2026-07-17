@@ -12,6 +12,11 @@ from prismdoc.pipeline import Pipeline
 from prismdoc.registry import create, get_factory
 from prismdoc.schema import FieldSpec, TargetSchema
 from prismdoc.stages.base import Context, Stage
+from prismdoc.stages.cascade import (
+    CascadeStage,
+    get_scorer,
+    required_fill_ratio_for,
+)
 
 
 def load_pipeline(path: str | Path) -> tuple[Pipeline, Context]:
@@ -43,16 +48,79 @@ def build_pipeline(config: dict[str, Any]) -> tuple[Pipeline, Context]:
     stages: list[Stage] = []
     for index, item in enumerate(pipeline_items):
         key, params = _resolve_pipeline_item(item, index)
-        params = dict(params)
-        factory = get_factory(key)
-        if (
-            "schema" in inspect.signature(factory).parameters
-            and "schema" not in params
-        ):
-            params["schema"] = target_schema
-        stages.append(create(key, **params))
+        if key == "cascade":
+            stages.append(
+                _build_cascade_stage(params, target_schema, index)
+            )
+            continue
+        stages.append(_instantiate_stage(key, params, target_schema))
 
     return Pipeline(stages), Context(target_schema=target_schema)
+
+
+def _instantiate_stage(
+    key: str, params: dict[str, Any], target_schema: TargetSchema
+) -> Stage:
+    params = dict(params)
+    factory = get_factory(key)
+    if (
+        "schema" in inspect.signature(factory).parameters
+        and "schema" not in params
+    ):
+        params["schema"] = target_schema
+    stage = create(key, **params)
+    if not isinstance(stage, Stage):
+        raise TypeError(
+            f"Registry key {key!r} did not produce a Stage, "
+            f"got {type(stage).__name__}"
+        )
+    return stage
+
+
+def _build_cascade_stage(
+    params: dict[str, Any],
+    target_schema: TargetSchema,
+    index: int,
+) -> CascadeStage:
+    for required in ("primary", "fallback", "scorer", "threshold"):
+        if required not in params:
+            raise ValueError(
+                f"Pipeline item[{index}] cascade missing required key "
+                f"{required!r}"
+            )
+    primary_key = params["primary"]
+    fallback_key = params["fallback"]
+    scorer_name = params["scorer"]
+    if not isinstance(primary_key, str):
+        raise ValueError(
+            f"Pipeline item[{index}] cascade.primary must be a string, "
+            f"got {type(primary_key).__name__}"
+        )
+    if not isinstance(fallback_key, str):
+        raise ValueError(
+            f"Pipeline item[{index}] cascade.fallback must be a string, "
+            f"got {type(fallback_key).__name__}"
+        )
+    if not isinstance(scorer_name, str):
+        raise ValueError(
+            f"Pipeline item[{index}] cascade.scorer must be a string, "
+            f"got {type(scorer_name).__name__}"
+        )
+
+    primary = _instantiate_stage(primary_key, {}, target_schema)
+    fallback = _instantiate_stage(fallback_key, {}, target_schema)
+
+    if scorer_name == "required_fill_ratio":
+        scorer = required_fill_ratio_for(target_schema)
+    else:
+        scorer = get_scorer(scorer_name)
+
+    return CascadeStage(
+        primary=primary,
+        fallback=fallback,
+        scorer=scorer,
+        threshold=float(params["threshold"]),
+    )
 
 
 def _build_target_schema(schema_cfg: Any) -> TargetSchema:
@@ -107,6 +175,7 @@ def _resolve_pipeline_item(
 
 def _ensure_plugins() -> None:
     """Re-register default stage factories (safe after ``registry.clear()``)."""
+    from prismdoc.stages.cascade import register_plugins as register_cascade
     from prismdoc.stages.extract import register_plugins as register_extract
     from prismdoc.stages.ingest import register_plugins as register_ingest
     from prismdoc.stages.normalize import register_plugins as register_normalize
@@ -120,3 +189,4 @@ def _ensure_plugins() -> None:
     register_table_extract()
     register_validate()
     register_normalize()
+    register_cascade()
