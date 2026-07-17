@@ -11,9 +11,9 @@ model logprobs or self-consistency are also deferred.
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
+from prismdoc.matching import value_in_text
 from prismdoc.models import Document, Record
 from prismdoc.registry import register
 from prismdoc.schema import FieldSpec, TargetSchema
@@ -24,8 +24,6 @@ _CONF_MISSING = 0.0
 _CONF_TYPE_MISMATCH = 0.3
 _CONF_UNGROUNDED = 0.4
 _CONF_GROUNDED = 0.9
-
-_WHITESPACE_RE = re.compile(r"\s+")
 
 
 class ConfidenceStage(Stage):
@@ -65,51 +63,9 @@ class ConfidenceStage(Stage):
         return doc
 
 
-def _normalize(text: str) -> str:
-    return _WHITESPACE_RE.sub(" ", text.lower()).strip()
-
-
-def _digits_only(text: str) -> str:
-    return "".join(ch for ch in text if ch.isdigit())
-
-
-def _looks_numeric(value: Any) -> bool:
-    if isinstance(value, bool):
-        return False
-    if isinstance(value, (int, float)):
-        return True
-    text = str(value).strip()
-    if not text:
-        return False
-    digits = _digits_only(text)
-    if not digits:
-        return False
-    # Allow common numeric punctuation; reject if other letters remain.
-    stripped = re.sub(r"[\d\s.,+\-]", "", text)
-    return stripped == ""
-
-
 def _is_grounded(value: Any, doc_text: str) -> bool:
     """Return True if a normalized form of ``value`` appears in ``doc_text``."""
-    raw = str(value).strip()
-    if not raw:
-        return False
-
-    norm_value = _normalize(raw)
-    if not norm_value:
-        return False
-
-    norm_doc = _normalize(doc_text)
-    if norm_value in norm_doc:
-        return True
-
-    if _looks_numeric(value):
-        value_digits = _digits_only(raw)
-        doc_digits = _digits_only(norm_doc)
-        if value_digits and value_digits in doc_digits:
-            return True
-
-    return False
+    return value_in_text(value, doc_text)
 
 
 def _field_confidence(

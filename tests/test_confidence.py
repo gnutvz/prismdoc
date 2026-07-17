@@ -114,7 +114,7 @@ def test_ungrounded_hallucination_0_4_with_reason() -> None:
 
 def test_numeric_grounding_tolerates_formatting() -> None:
     assert _is_grounded(12.5, "total is 12.50 EUR")
-    assert _is_grounded("12.5", "amount 12,5 units")
+    assert not _is_grounded("12.5", "invoice 1250 subtotal 99.00")
 
     doc = _doc_with_text(
         {"name": "Widget", "sku": "W-1", "price": 12.5, "qty": 3},
@@ -122,6 +122,25 @@ def test_numeric_grounding_tolerates_formatting() -> None:
     )
     result = ConfidenceStage(schema=_schema()).run(doc, Context())
     assert result.records[0].confidence["price"] == 0.9
+
+
+def test_numeric_digit_soup_no_longer_grounds() -> None:
+    """Hallucinated 12.5 must not ground against digit-soup match in 1250."""
+    doc = _doc_with_text(
+        {"name": "Widget", "sku": "W-1", "price": 12.5, "qty": 3},
+        "Catalog: Widget sku W-1 invoice 1250 qty 3",
+    )
+    result = ConfidenceStage(schema=_schema()).run(doc, Context())
+
+    assert result.records[0].confidence["price"] == 0.4
+    assert {
+        "record": 0,
+        "field": "price",
+        "confidence": 0.4,
+        "reason": "ungrounded",
+    } in result.artifacts["low_confidence"]
+    assert result.records[0].confidence["qty"] == 0.9
+    assert result.records[0].confidence["name"] == 0.9
 
 
 def test_missing_required_field_confidence_0_and_flagged() -> None:

@@ -5,19 +5,10 @@ from __future__ import annotations
 import re
 from typing import Any
 
-_WHITESPACE_RE = re.compile(r"\s+")
-_NUMBER_TOKEN_RE = re.compile(r"\d+(?:\.\d+)?")
-# Digits with optional decimal; allows surrounding currency / separators.
-_NUMERIC_LOOKING_RE = re.compile(
-    r"^[\s$€£¥₹]*(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?[\s$€£¥₹]*$"
-)
+from prismdoc.matching import normalize_text, value_in_text
+
 # Split on whitespace and punctuation; keep alphanumeric runs.
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
-
-
-def _normalize(s: str) -> str:
-    """Lowercase, collapse whitespace, strip."""
-    return _WHITESPACE_RE.sub(" ", s.lower()).strip()
 
 
 def _tokens(s: str) -> list[str]:
@@ -25,55 +16,14 @@ def _tokens(s: str) -> list[str]:
     return [t for t in _TOKEN_RE.findall(s.lower()) if len(t) > 2]
 
 
-def _looks_numeric(value: str) -> bool:
-    """True when ``value`` is primarily a number (e.g. a receipt total)."""
-    cleaned = value.strip()
-    if not cleaned:
-        return False
-    return bool(_NUMERIC_LOOKING_RE.match(cleaned))
-
-
-def _parse_number(value: str) -> float | None:
-    """Extract a float from a numeric-looking string, ignoring currency chars."""
-    stripped = value.strip().replace(",", "")
-    match = _NUMBER_TOKEN_RE.search(stripped)
-    if match is None:
-        return None
-    try:
-        return float(match.group())
-    except ValueError:
-        return None
-
-
 def value_found(value: str, text: str) -> bool:
     """Return True if ``value`` appears in ``text`` under OCR-recall rules.
 
-    Primary check: normalized substring match. For numeric-looking values
-    (e.g. totals), also accept a digits/decimal-tolerant float match so that
-    ``12.5`` is found in text containing ``12.50``.
+    Delegates to :func:`prismdoc.matching.value_in_text` (shared with confidence
+    grounding): normalized substring match, plus number-token float match for
+    numeric-looking values (``12.5`` finds ``12.50``, not digit-soup ``1250``).
     """
-    if not value:
-        return False
-
-    normalized_value = _normalize(value)
-    normalized_text = _normalize(text)
-    if normalized_value and normalized_value in normalized_text:
-        return True
-
-    if not _looks_numeric(value):
-        return False
-
-    target = _parse_number(value)
-    if target is None:
-        return False
-
-    for match in _NUMBER_TOKEN_RE.finditer(normalized_text.replace(",", "")):
-        try:
-            if float(match.group()) == target:
-                return True
-        except ValueError:
-            continue
-    return False
+    return value_in_text(value, text)
 
 
 def token_recall(value: str, text: str) -> float | None:
@@ -86,7 +36,7 @@ def token_recall(value: str, text: str) -> float | None:
     value_tokens = _tokens(value)
     if len(value_tokens) < 2:
         return None
-    text_token_set = set(_tokens(_normalize(text)))
+    text_token_set = set(_tokens(normalize_text(text)))
     hits = sum(1 for t in value_tokens if t in text_token_set)
     return hits / len(value_tokens)
 

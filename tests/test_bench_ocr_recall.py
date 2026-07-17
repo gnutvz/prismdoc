@@ -45,6 +45,8 @@ def test_value_found_numeric_tolerant() -> None:
     assert value_found("12.5", text) is True
     assert value_found("12.50", text) is True
     assert value_found("$12.50", text) is True
+    # Number-token match only — digit soup must not false-positive.
+    assert value_found("12.5", "invoice 1250 subtotal 99.00") is False
 
 
 def test_value_found_absent() -> None:
