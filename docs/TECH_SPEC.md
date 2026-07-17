@@ -119,7 +119,9 @@ docker-compose.yml
 - New dependencies: declared in `pyproject.toml`, justified in the report.
 - Ticket report: files changed, test commands + results, open doubts.
 
-## 8. Phase 1 ticket breakdown
+## 8. Build order
 
-See [../orchestrate/tickets/BACKLOG.md](../orchestrate/tickets/BACKLOG.md). Priority goes from the
-**core contracts** (T-001) outward, since every Stage depends on that contract.
+Implementation proceeds from the **core contracts** (Document model, Stage, Pipeline, Registry)
+outward, since every Stage depends on that contract: core → ingest → parse → extract → validate →
+normalize → config → serving → demo, then the cost-aware cascade and figure sub-pipeline. See the
+roadmap in the [README](../README.md).
