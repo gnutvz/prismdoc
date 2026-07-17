@@ -221,7 +221,7 @@ ruff check src tests
 
 ### Eval harness (offline)
 
-After generating the retail sample, measure per-field accuracy against ground truth:
+After generating the retail sample, the harness runs end-to-end against ground truth:
 
 ```bash
 python examples/retail/make_sample.py
@@ -229,8 +229,28 @@ python -m prismdoc.eval --dataset examples/eval/retail_dataset.json
 # or: prismdoc-eval --dataset examples/eval/retail_dataset.json
 ```
 
-The retail dataset uses the table-extractor pipeline (`examples/retail/demo.yaml`) and
-the known catalog rows, so overall field accuracy is **1.0** offline.
+The retail dataset is a **smoke case**, not a quality claim: the table extractor reads a file
+produced by the same script that wrote the ground-truth rows — a tautology that proves the
+harness wiring works. Real-world accuracy (and the cost trade-off) is measured by the
+threshold-sweep frontier below, not by this smoke run.
+
+### Threshold sweep (accuracy vs USD frontier)
+
+Sweep cascade thresholds to emit the accuracy-vs-USD frontier. Requires a dataset whose
+`config_path` is a cascade pipeline (e.g. retarget `examples/eval/retail_dataset.json` at
+`examples/retail/pipeline_cascade.yaml`):
+
+```bash
+python -m prismdoc.eval.sweep \
+  --dataset path/to/cascade_dataset.json \
+  --thresholds 0,10,20,50,100 \
+  --out frontier.csv \
+  --plot frontier.png   # optional; needs pip install 'prismdoc[viz]'
+# or: prismdoc-sweep --dataset ... --thresholds ... --out frontier.csv
+```
+
+Writes `threshold,accuracy,total_usd,escalations` and prints a table. `--plot` is skipped
+cleanly when matplotlib is not installed.
 
 ## Roadmap
 
@@ -240,7 +260,8 @@ Done (v0.2.0):
 - [x] YAML config, CLI, FastAPI + Docker
 - [x] Cost-aware cascade (threshold + fallback)
 - [x] Figure/diagram sub-pipeline
-- [x] Eval harness (per-field accuracy vs ground truth)
+- [x] Eval harness (type-aware per-field accuracy vs ground truth)
+- [x] Threshold-sweep accuracy/USD frontier (`prismdoc-sweep`)
 - [x] Cost ledger (per-stage token/USD accounting + budget)
 - [x] Per-field confidence + low-confidence flags
 - [x] LLM resilience (timeout + retry/backoff)

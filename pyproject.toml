@@ -37,10 +37,12 @@ dev = [
 ]
 docling = ["docling"]
 llm = ["litellm"]
+viz = ["matplotlib"]
 
 [project.scripts]
 prismdoc = "prismdoc.cli:main"
 prismdoc-eval = "prismdoc.eval.__main__:main"
+prismdoc-sweep = "prismdoc.eval.sweep:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/prismdoc"]

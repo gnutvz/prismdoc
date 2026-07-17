@@ -2,9 +2,38 @@
 
 from __future__ import annotations
 
+import math
+import re
 from typing import Any
 
 from prismdoc.schema import TargetSchema
+
+_ABS_TOL = 1e-9
+_REL_TOL = 1e-6
+_CURRENCY_RE = re.compile(r"[$€£¥₩₹]")
+_THOUSANDS_RE = re.compile(r",")
+_WHITESPACE_RE = re.compile(r"\s+")
+
+_TRUE_TOKENS = frozenset({"true", "1", "yes"})
+_FALSE_TOKENS = frozenset({"false", "0", "no"})
+
+
+def values_match(pred: Any, exp: Any, field_type: str) -> bool:
+    """Compare predicted and expected values with type-aware semantics.
+
+    Missing (``None``) values never match. Unknown ``field_type`` falls back to
+    string comparison.
+    """
+    if pred is None or exp is None:
+        return False
+
+    if field_type == "number":
+        return _numbers_match(pred, exp)
+    if field_type == "integer":
+        return _integers_match(pred, exp)
+    if field_type == "boolean":
+        return _booleans_match(pred, exp)
+    return _strings_match(pred, exp)
 
 
 def align_records(
@@ -28,10 +57,11 @@ def field_metrics(
     """Compute per-field and overall accuracy for aligned record pairs.
 
     A field is correct when predicted and expected values are both present and
-    ``str(value).strip()`` matches. Missing predicted or expected counts as
-    incorrect.
+    ``values_match`` agrees under the field's declared schema type. Missing
+    predicted or expected counts as incorrect.
     """
     field_names = schema.field_names()
+    field_types = {field.name: field.type for field in schema.fields}
     per_field: dict[str, dict[str, float | int]] = {
         name: {"correct": 0, "total": 0, "accuracy": 0.0} for name in field_names
     }
@@ -45,7 +75,7 @@ def field_metrics(
         for name in field_names:
             per_field[name]["total"] = int(per_field[name]["total"]) + 1
             overall_total += 1
-            if _field_correct(predicted, expected, name):
+            if _field_correct(predicted, expected, name, field_types.get(name, "string")):
                 per_field[name]["correct"] = int(per_field[name]["correct"]) + 1
                 overall_correct += 1
             else:
@@ -132,13 +162,105 @@ def _field_correct(
     predicted: dict[str, Any] | None,
     expected: dict[str, Any] | None,
     name: str,
+    field_type: str,
 ) -> bool:
     if predicted is None or expected is None:
         return False
     if name not in predicted or name not in expected:
         return False
-    pred_val = predicted[name]
-    exp_val = expected[name]
-    if pred_val is None or exp_val is None:
+    return values_match(predicted[name], expected[name], field_type)
+
+
+def _parse_number(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        if isinstance(value, float) and not math.isfinite(value):
+            return None
+        return float(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    text = _CURRENCY_RE.sub("", text)
+    text = _THOUSANDS_RE.sub("", text)
+    text = _WHITESPACE_RE.sub("", text)
+    if not text:
+        return None
+    try:
+        parsed = float(text)
+    except ValueError:
+        return None
+    if not math.isfinite(parsed):
+        return None
+    return parsed
+
+
+def _numbers_match(pred: Any, exp: Any) -> bool:
+    left = _parse_number(pred)
+    right = _parse_number(exp)
+    if left is None or right is None:
         return False
-    return str(pred_val).strip() == str(exp_val).strip()
+    return math.isclose(left, right, rel_tol=_REL_TOL, abs_tol=_ABS_TOL)
+
+
+def _parse_integer(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value) or not value.is_integer():
+            return None
+        return int(value)
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        as_float = float(text)
+    except ValueError:
+        return None
+    if not math.isfinite(as_float) or not as_float.is_integer():
+        return None
+    return int(as_float)
+
+
+def _integers_match(pred: Any, exp: Any) -> bool:
+    left = _parse_integer(pred)
+    right = _parse_integer(exp)
+    if left is None or right is None:
+        return False
+    return left == right
+
+
+def _normalize_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if value == 1:
+            return True
+        if value == 0:
+            return False
+        return None
+    text = str(value).strip().lower()
+    if text in _TRUE_TOKENS:
+        return True
+    if text in _FALSE_TOKENS:
+        return False
+    return None
+
+
+def _booleans_match(pred: Any, exp: Any) -> bool:
+    left = _normalize_bool(pred)
+    right = _normalize_bool(exp)
+    if left is None or right is None:
+        return False
+    return left is right
+
+
+def _normalize_string(value: Any) -> str:
+    text = str(value).strip().lower()
+    return _WHITESPACE_RE.sub(" ", text)
+
+
+def _strings_match(pred: Any, exp: Any) -> bool:
+    return _normalize_string(pred) == _normalize_string(exp)
