@@ -10,6 +10,7 @@ from prismdoc.cost import BudgetExceededError, estimate_cost, record_cost
 from prismdoc.errors import UnreadableDocumentError
 from prismdoc.models import Block, Document, Page, Record, Source
 from prismdoc.pipeline import Pipeline
+from prismdoc.resilience import with_retry
 from prismdoc.schema import FieldSpec, TargetSchema
 from prismdoc.stages.base import Context, Stage
 from prismdoc.stages.cascade import CascadeStage, get_scorer, register_scorer
@@ -68,6 +69,7 @@ __all__ = [
     "record_cost",
     "register_scorer",
     "registry",
+    "with_retry",
     "__version__",
     "hello",
 ]

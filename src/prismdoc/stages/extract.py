@@ -10,6 +10,7 @@ from typing import Any
 from prismdoc.cost import check_budget, record_cost
 from prismdoc.models import Document, Record
 from prismdoc.registry import register
+from prismdoc.resilience import with_retry
 from prismdoc.schema import TargetSchema
 from prismdoc.stages.base import Context, Stage
 
@@ -33,11 +34,49 @@ class LLMClient(ABC):
         ...
 
 
+def _transient_exception_types() -> tuple[type[BaseException], ...] | None:
+    try:
+        from litellm.exceptions import (
+            APIConnectionError,
+            InternalServerError,
+            RateLimitError,
+            ServiceUnavailableError,
+            Timeout,
+        )
+    except ImportError:
+        return None
+    return (
+        Timeout,
+        RateLimitError,
+        APIConnectionError,
+        InternalServerError,
+        ServiceUnavailableError,
+    )
+
+
+def _is_transient(exc: BaseException) -> bool:
+    types = _transient_exception_types()
+    if types is None:
+        return not isinstance(exc, (ValueError, TypeError))
+    return isinstance(exc, types)
+
+
 class LiteLLMClient(LLMClient):
     """Optional litellm-backed client (requires ``pip install prismdoc[llm]``)."""
 
-    def __init__(self, model: str = "gpt-4o-mini", **opts: Any) -> None:
+    def __init__(
+        self,
+        model: str = "gpt-4o-mini",
+        *,
+        timeout: float = 60.0,
+        max_retries: int = 2,
+        backoff_base: float = 0.5,
+        **opts: Any,
+    ) -> None:
         self.model = model
+        self.timeout = timeout
+        self.max_retries = max_retries
+        self.backoff_base = backoff_base
         self.opts = opts
         self.last_usage: dict[str, int] | None = None
 
@@ -47,10 +86,19 @@ class LiteLLMClient(LLMClient):
         except ImportError as exc:
             raise ImportError(_LLM_EXTRA_HINT) from exc
 
-        response = litellm.completion(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            **self.opts,
+        def _call() -> Any:
+            return litellm.completion(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                timeout=self.timeout,
+                **self.opts,
+            )
+
+        response = with_retry(
+            _call,
+            max_retries=self.max_retries,
+            backoff_base=self.backoff_base,
+            retry_on=_is_transient,
         )
         usage = getattr(response, "usage", None)
         if usage is not None:
