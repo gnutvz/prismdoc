@@ -71,6 +71,9 @@ def _print_summary(doc: Document, *, file: TextIO) -> None:
         )
     else:
         print("validation: (none)", file=file)
+    low = doc.artifacts.get("low_confidence")
+    if isinstance(low, list) and low:
+        print(f"{len(low)} low-confidence fields", file=file)
 
 
 def _print_records_table(

@@ -7,6 +7,7 @@ from prismdoc.stages.cascade import (
     register_scorer,
     text_length,
 )
+from prismdoc.stages.confidence import ConfidenceStage
 from prismdoc.stages.extract import ExtractStage, LLMClient, LiteLLMClient
 from prismdoc.stages.figures import (
     Figure,
@@ -23,6 +24,7 @@ from prismdoc.stages.validate import ValidateStage
 
 __all__ = [
     "CascadeStage",
+    "ConfidenceStage",
     "Context",
     "ExtractStage",
     "Figure",

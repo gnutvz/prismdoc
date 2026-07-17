@@ -13,6 +13,7 @@ from prismdoc.pipeline import Pipeline
 from prismdoc.schema import FieldSpec, TargetSchema
 from prismdoc.stages.base import Context, Stage
 from prismdoc.stages.cascade import CascadeStage, get_scorer, register_scorer
+from prismdoc.stages.confidence import ConfidenceStage
 from prismdoc.stages.extract import ExtractStage, LLMClient
 from prismdoc.stages.figures import (
     Figure,
@@ -33,6 +34,7 @@ __all__ = [
     "Block",
     "BudgetExceededError",
     "CascadeStage",
+    "ConfidenceStage",
     "Context",
     "Document",
     "ExtractStage",

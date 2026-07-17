@@ -67,6 +67,8 @@ async def extract(
             "records": [record.fields for record in doc.records],
             "validation": doc.artifacts.get("validation"),
             "normalize": doc.artifacts.get("normalize"),
+            "confidence": [record.confidence for record in doc.records],
+            "low_confidence": doc.artifacts.get("low_confidence"),
             "trace": [
                 {
                     "stage": entry.stage,
