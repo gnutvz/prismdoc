@@ -43,6 +43,7 @@ viz = ["matplotlib"]
 prismdoc = "prismdoc.cli:main"
 prismdoc-eval = "prismdoc.eval.__main__:main"
 prismdoc-sweep = "prismdoc.eval.sweep:main"
+prismdoc-bench = "prismdoc.bench.sroie:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/prismdoc"]
