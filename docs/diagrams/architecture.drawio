@@ -1,0 +1,65 @@
+<mxfile host="app.diagrams.net" agent="Claude" version="21.0.0">
+  <diagram name="architecture" id="arch">
+    <mxGraphModel dx="1400" dy="800" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1720" pageHeight="640" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="prismdoc — cost-aware, schema-driven document extraction pipeline" style="text;html=1;fontSize=20;fontStyle=1;align=left;verticalAlign=middle;fontColor=#1a1a1a;" vertex="1" parent="1">
+          <mxGeometry x="40" y="24" width="1200" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="src" value="Document IN&#10;pdf · image · xlsx" style="shape=document;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="150" width="130" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="ingest" value="INGEST&#10;loaders" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="210" y="160" width="120" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="parse" value="PARSE&#10;cost-aware cascade" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="370" y="160" width="140" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="figures" value="FIGURE&#10;sub-pipeline" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="550" y="160" width="140" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="extract" value="EXTRACT&#10;schema-driven" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="730" y="160" width="130" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="validate" value="VALIDATE&#10;+ confidence" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="900" y="160" width="120" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="normalize" value="NORMALIZE&#10;units · dedup" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="160" width="120" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="out" value="Structured OUT&#10;JSON · CSV" style="shape=document;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;fontStyle=1;verticalAlign=top;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1220" y="150" width="130" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;strokeColor=#333333;" edge="1" parent="1" source="src" target="ingest"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;strokeColor=#333333;" edge="1" parent="1" source="ingest" target="parse"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;strokeColor=#333333;" edge="1" parent="1" source="parse" target="figures"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;strokeColor=#333333;" edge="1" parent="1" source="figures" target="extract"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;strokeColor=#333333;" edge="1" parent="1" source="extract" target="validate"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;strokeColor=#333333;" edge="1" parent="1" source="validate" target="normalize"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;strokeColor=#333333;" edge="1" parent="1" source="normalize" target="out"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <mxCell id="n_parse" value="passthrough (cheap)  →  if score &lt; threshold  →  Docling OCR (fallback)" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#fff2e6;strokeColor=#d79b00;fontSize=10;align=left;verticalAlign=middle;spacingLeft=6;" vertex="1" parent="1">
+          <mxGeometry x="370" y="250" width="320" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="n_fig" value="extract image  →  [[FIGURE:id]] placeholder  →  process (OCR/VLM)  →  merge back" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#f3ecf9;strokeColor=#9673a6;fontSize=10;align=left;verticalAlign=middle;spacingLeft=6;" vertex="1" parent="1">
+          <mxGeometry x="370" y="292" width="320" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="n_ext" value="LLM via litellm (Bedrock / OpenAI / local) · Pydantic target schema · robust JSON parse" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#eafaf0;strokeColor=#82b366;fontSize=10;align=left;verticalAlign=middle;spacingLeft=6;" vertex="1" parent="1">
+          <mxGeometry x="730" y="250" width="450" height="34" as="geometry" />
+        </mxCell>
+
+        <mxCell id="band1" value="Pluggable Stage registry   ·   declarative YAML pipeline config   ·   per-stage trace + cost signal" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=12;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="210" y="380" width="1140" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="band2" value="Run as:   Python library   ·   CLI (prismdoc)   ·   FastAPI + Docker microservice (POST /extract)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=12;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="210" y="436" width="1140" height="44" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

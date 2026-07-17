@@ -4,10 +4,19 @@ build-backend = "hatchling.build"
 
 [project]
 name = "prismdoc"
-version = "0.0.0"
+version = "0.1.0"
 description = "Cost-aware, schema-driven document extraction pipeline (deploy-as-microservice)."
 readme = "README.md"
 requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "prismdoc contributors" }]
+keywords = ["document-extraction", "ocr", "llm", "pipeline", "invoice", "receipt", "rag"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Text Processing",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 dependencies = [
     "pydantic>=2.0,<3",
     "pymupdf>=1.24",
