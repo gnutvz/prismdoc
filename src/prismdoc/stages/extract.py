@@ -9,12 +9,19 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from prismdoc.cost import check_budget, record_cost
+from prismdoc.cost import (
+    BudgetExceededError,
+    check_budget,
+    estimate_cost,
+    record_cost,
+)
+from prismdoc.errors import InputTooLargeError
 from prismdoc.models import Document, Record
 from prismdoc.registry import register
 from prismdoc.resilience import with_retry
 from prismdoc.schema import TargetSchema
 from prismdoc.stages.base import Context, Stage
+from prismdoc.tokens import count_tokens
 
 _LLM_EXTRA_HINT = "Install the 'llm' extra: pip install prismdoc[llm]"
 
@@ -131,10 +138,14 @@ class ExtractStage(Stage):
         schema: TargetSchema,
         client: LLMClient | None = None,
         model: str = "gpt-4o-mini",
+        max_input_tokens: int | None = None,
+        expected_output_tokens: int = 512,
         **opts: Any,
     ) -> None:
         self.schema = schema
         self.model = model
+        self.max_input_tokens = max_input_tokens
+        self.expected_output_tokens = expected_output_tokens
         self.client = (
             client if client is not None else LiteLLMClient(model=model, **opts)
         )
@@ -142,6 +153,26 @@ class ExtractStage(Stage):
     def run(self, doc: Document, ctx: Context) -> Document:
         text = doc.artifacts.get("parsed_markdown") or doc.full_text
         prompt = _build_prompt(str(text), self.schema)
+        tokens_in = count_tokens(prompt, self.model)
+        if (
+            self.max_input_tokens is not None
+            and tokens_in > self.max_input_tokens
+        ):
+            raise InputTooLargeError(
+                f"Prompt is {tokens_in} tokens, which exceeds max_input_tokens="
+                f"{self.max_input_tokens}"
+            )
+        budget = ctx.options.get("budget_usd")
+        if budget is not None:
+            projected = _projected_cost(
+                doc, self.model, tokens_in, self.expected_output_tokens
+            )
+            budget_usd = float(budget)
+            if projected > budget_usd:
+                raise BudgetExceededError(
+                    f"Projected cost ${projected:.6f} exceeds budget "
+                    f"${budget_usd:.6f}"
+                )
         completion = self.client.complete(prompt)
         usage = completion.usage
         if usage is not None:
@@ -158,12 +189,25 @@ class ExtractStage(Stage):
                 int(usage.get("prompt_tokens", 0)),
                 int(usage.get("completion_tokens", 0)),
             )
-            budget = ctx.options.get("budget_usd")
             if budget is not None:
                 check_budget(doc, float(budget))
         parsed = _parse_records_json(completion.text)
         doc.records = [Record(fields=obj) for obj in parsed]
         return doc
+
+
+def _projected_cost(
+    doc: Document,
+    model: str,
+    tokens_in: int,
+    expected_output_tokens: int,
+) -> float:
+    """Estimate total USD if the upcoming call is charged on top of the ledger."""
+    ledger = doc.artifacts.get("cost")
+    current = (
+        float(ledger.get("total_usd", 0.0)) if isinstance(ledger, dict) else 0.0
+    )
+    return current + estimate_cost(model, tokens_in, expected_output_tokens)
 
 
 def _build_prompt(text: str, schema: TargetSchema) -> str:

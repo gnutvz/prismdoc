@@ -9,3 +9,7 @@ class UnreadableDocumentError(Exception):
     Typical causes: encrypted/password-protected, corrupt, or unsupported
     internal structure.
     """
+
+
+class InputTooLargeError(Exception):
+    """Raised when a prompt exceeds the configured max input token limit."""
