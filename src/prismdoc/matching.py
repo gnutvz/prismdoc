@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 _WHITESPACE_RE = re.compile(r"\s+")
+_NON_ALNUM_RE = re.compile(r"[^a-z0-9]")
 _NUMBER_TOKEN_RE = re.compile(r"\d+(?:\.\d+)?")
 # Digits with optional decimal; allows surrounding currency / separators.
 _NUMERIC_LOOKING_RE = re.compile(
@@ -16,6 +17,15 @@ _NUMERIC_LOOKING_RE = re.compile(
 def normalize_text(s: str) -> str:
     """Lowercase, collapse whitespace, strip."""
     return _WHITESPACE_RE.sub(" ", s.lower()).strip()
+
+
+def normalize_alphanumeric(s: str) -> str:
+    """Lowercase and strip every non-alphanumeric character.
+
+    Used by eval string equality so formatting (spaces, punctuation) does not
+    cause false mismatches while content order remains significant.
+    """
+    return _NON_ALNUM_RE.sub("", s.lower())
 
 
 def _looks_numeric(value: str) -> bool:

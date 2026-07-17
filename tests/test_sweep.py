@@ -19,12 +19,36 @@ from prismdoc.stages.extract import Completion, LLMClient
 def test_values_match_type_aware() -> None:
     assert values_match(12.5, "12.50", "number") is True
     assert values_match("USD", "usd", "string") is True
+    assert values_match("USD", "usd ", "string") is True
     assert values_match("7", 7, "integer") is True
     assert values_match("yes", True, "boolean") is True
     assert values_match(12.5, "13.0", "number") is False
     assert values_match("USD", "EUR", "string") is False
     assert values_match("7", 8, "integer") is False
     assert values_match("yes", False, "boolean") is False
+
+
+def test_values_match_string_alphanumeric_formatting() -> None:
+    """Punctuation/spacing-only diffs match; real content diffs do not."""
+    assert (
+        values_match(
+            "BOOK TA .K (TAMAN DAYA) SDN BHD",
+            "BOOK TAK(TAMAN DAYA)SDN BHD",
+            "string",
+        )
+        is True
+    )
+    assert values_match("Acme Corp", "Globex Ltd", "string") is False
+    assert values_match("abc", "ab", "string") is False
+    # Address: different street number digits must still fail.
+    assert (
+        values_match(
+            "NO.53 55,57 & 59, JALAN SAGU 18",
+            "NO.53 55,57 & 59, JALAN SAGU 19",
+            "string",
+        )
+        is False
+    )
 
 
 def test_field_metrics_formatting_only_number_matches() -> None:

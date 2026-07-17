@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
-from prismdoc.matching import normalize_text, value_in_text
+from prismdoc.matching import normalize_alphanumeric, normalize_text, value_in_text
 
 
 def test_normalize_text_lowercase_collapse_strip() -> None:
     assert normalize_text("  Hello   WORLD  ") == "hello world"
+
+
+def test_normalize_alphanumeric_strips_punctuation_and_space() -> None:
+    assert (
+        normalize_alphanumeric("BOOK TA .K (TAMAN DAYA) SDN BHD")
+        == "booktaktamandayasdnbhd"
+    )
+    assert normalize_alphanumeric("BOOK TAK(TAMAN DAYA)SDN BHD") == (
+        "booktaktamandayasdnbhd"
+    )
 
 
 def test_value_in_text_numeric_token_match_not_digit_soup() -> None:

@@ -6,6 +6,7 @@ import math
 import re
 from typing import Any
 
+from prismdoc.matching import normalize_alphanumeric
 from prismdoc.schema import TargetSchema
 
 _ABS_TOL = 1e-9
@@ -258,8 +259,7 @@ def _booleans_match(pred: Any, exp: Any) -> bool:
 
 
 def _normalize_string(value: Any) -> str:
-    text = str(value).strip().lower()
-    return _WHITESPACE_RE.sub(" ", text)
+    return normalize_alphanumeric(str(value))
 
 
 def _strings_match(pred: Any, exp: Any) -> bool:
