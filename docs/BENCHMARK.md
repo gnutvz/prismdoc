@@ -21,6 +21,8 @@ real OCR at run time.
 | **exact** | Normalized substring match (case / whitespace; numeric totals are decimal-tolerant, e.g. `12.5` ↔ `12.50`) | Strict readout. Under-reports long multi-line fields (`address`, `company`) when OCR is near-complete but not verbatim. |
 | **token** | Token-overlap recall: fraction of the field’s significant tokens (length > 2, split on whitespace/punctuation) that appear in the OCR text | Fair readout for multi-token fields. **Primary** metric for comparing OCR quality. |
 
+Token-overlap is reported **only for multi-token fields** (at least 2 significant tokens). Short/atomic fields such as `date` and `total` show `—` for token and should be read via **exact**. When token is measurable, the invariant is **token ≥ exact**; a reported token below exact would indicate a metrics bug, not an OCR finding.
+
 Exact match alone can show `address` recall near 0.0 even when most address tokens are present in the OCR text. Token-overlap is the primary table column for that reason; exact remains available as a strict diagnostic.
 
 ## What this does **not** measure
@@ -84,9 +86,12 @@ Real run — **20 SROIE receipts**, Docling (RapidOCR / PP-OCRv4, CPU), 2026-07-
 | Field   | exact | token |
 |---------|-------|-------|
 | company | 0.40  | 0.84  |
-| date    | 0.95  | 0.55  |
+| date    | 0.95  | —     |
 | address | 0.00  | 0.75  |
-| total   | 0.95  | 0.10  |
+| total   | 0.95  | —     |
+
+`date` and `total` show `—` for token: they are short/atomic (< 2 significant tokens), so token-overlap
+is not measurable — read them via **exact**. (n = 20, preliminary; expect roughly ±0.2 at this size.)
 
 ### How to read this (metric depends on field shape)
 
@@ -95,8 +100,8 @@ that fits each field:
 
 | Field   | Right metric | Recall | Read |
 |---------|--------------|--------|------|
-| date    | exact | **0.95** | short/atomic → verbatim match is fair |
-| total   | exact | **0.95** | short number → verbatim match is fair (token drops it: too short) |
+| date    | exact | **0.95** | short/atomic → verbatim match is fair (token not measurable → `—`) |
+| total   | exact | **0.95** | short number → verbatim match is fair (token not measurable → `—`) |
 | company | token | **0.84** | multi-token → OCR captures most of it, not verbatim |
 | address | token | **0.75** | long multi-line → exact reads 0.00 but OCR has ~3/4 of the tokens |
 

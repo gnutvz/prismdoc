@@ -58,10 +58,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
+def _format_token(value: float | None, *, width: int) -> str:
+    """Format a token-recall cell; ``None`` renders as an em dash."""
+    if value is None:
+        return f"{'—':>{width}}"
+    return f"{value:>{width}.4f}"
+
+
 def _print_report(report: BenchReport, *, file: TextIO) -> None:
     print(f"n_samples: {report.n_samples}", file=file)
     print(f"overall_exact: {report.overall_exact:.4f}", file=file)
-    print(f"overall_token: {report.overall_token:.4f}", file=file)
+    overall_token_s = (
+        "—"
+        if report.overall_token is None
+        else f"{report.overall_token:.4f}"
+    )
+    print(f"overall_token: {overall_token_s}", file=file)
     print(file=file)
 
     if not report.per_field:
@@ -85,7 +97,7 @@ def _print_report(report: BenchReport, *, file: TextIO) -> None:
         print(
             f"{name.ljust(name_w)}  "
             f"{metrics.exact_recall:>{exact_w}.4f}  "
-            f"{metrics.token_recall:>{token_w}.4f}",
+            f"{_format_token(metrics.token_recall, width=token_w)}",
             file=file,
         )
 

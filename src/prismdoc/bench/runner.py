@@ -17,7 +17,7 @@ class FieldRecall(BaseModel):
     """Per-field aggregated exact and token-overlap recall."""
 
     exact_recall: float
-    token_recall: float
+    token_recall: float | None
 
 
 class BenchReport(BaseModel):
@@ -26,7 +26,7 @@ class BenchReport(BaseModel):
     n_samples: int
     per_field: dict[str, FieldRecall] = Field(default_factory=dict)
     overall_exact: float = 0.0
-    overall_token: float = 0.0
+    overall_token: float | None = None
 
 
 def run_ocr_recall(samples: list[BenchSample], parser: Parser) -> BenchReport:
@@ -40,9 +40,9 @@ def run_ocr_recall(samples: list[BenchSample], parser: Parser) -> BenchReport:
 
     field_exact_hits: dict[str, int] = {}
     field_token_sums: dict[str, float] = {}
+    field_token_counts: dict[str, int] = {}
     field_totals: dict[str, int] = {}
     sample_mean_exacts: list[float] = []
-    sample_mean_tokens: list[float] = []
 
     for sample in samples:
         doc = Document(source=Source(path=sample.image_path))
@@ -51,14 +51,16 @@ def run_ocr_recall(samples: list[BenchSample], parser: Parser) -> BenchReport:
         result = sample_recall(ocr_text, sample.fields)
         per_field = result["per_field"]
         sample_mean_exacts.append(float(result["mean_exact"]))
-        sample_mean_tokens.append(float(result["mean_token"]))
         for name, metrics in per_field.items():
             field_totals[name] = field_totals.get(name, 0) + 1
             if metrics["exact"]:
                 field_exact_hits[name] = field_exact_hits.get(name, 0) + 1
-            field_token_sums[name] = (
-                field_token_sums.get(name, 0.0) + float(metrics["token"])
-            )
+            token = metrics["token"]
+            if token is not None:
+                field_token_sums[name] = (
+                    field_token_sums.get(name, 0.0) + float(token)
+                )
+                field_token_counts[name] = field_token_counts.get(name, 0) + 1
 
     n_samples = len(samples)
     per_field_report = {
@@ -67,7 +69,9 @@ def run_ocr_recall(samples: list[BenchSample], parser: Parser) -> BenchReport:
                 (field_exact_hits.get(name, 0) / total) if total else 0.0
             ),
             token_recall=(
-                (field_token_sums.get(name, 0.0) / total) if total else 0.0
+                (field_token_sums[name] / field_token_counts[name])
+                if field_token_counts.get(name, 0)
+                else None
             ),
         )
         for name, total in field_totals.items()
@@ -75,8 +79,15 @@ def run_ocr_recall(samples: list[BenchSample], parser: Parser) -> BenchReport:
     overall_exact = (
         sum(sample_mean_exacts) / n_samples if n_samples else 0.0
     )
-    overall_token = (
-        sum(sample_mean_tokens) / n_samples if n_samples else 0.0
+    measurable_tokens = [
+        metrics.token_recall
+        for metrics in per_field_report.values()
+        if metrics.token_recall is not None
+    ]
+    overall_token: float | None = (
+        sum(measurable_tokens) / len(measurable_tokens)
+        if measurable_tokens
+        else None
     )
     return BenchReport(
         n_samples=n_samples,

@@ -76,22 +76,28 @@ def value_found(value: str, text: str) -> bool:
     return False
 
 
-def token_recall(value: str, text: str) -> float:
+def token_recall(value: str, text: str) -> float | None:
     """Fraction of ``value``'s significant tokens present in ``text``.
 
-    Uses normalized text. Returns 0.0 when ``value`` has no significant tokens.
+    Uses normalized text. Returns ``None`` when ``value`` has fewer than 2
+    significant tokens (token-overlap is only meaningful for multi-token
+    values; short/atomic fields should be read via exact match).
     """
     value_tokens = _tokens(value)
-    if not value_tokens:
-        return 0.0
+    if len(value_tokens) < 2:
+        return None
     text_token_set = set(_tokens(_normalize(text)))
     hits = sum(1 for t in value_tokens if t in text_token_set)
     return hits / len(value_tokens)
 
 
 def sample_recall(ocr_text: str, fields: dict[str, str]) -> dict[str, Any]:
-    """Per-field exact + token recall, plus sample-level mean exact / mean token."""
-    per_field: dict[str, dict[str, bool | float]] = {
+    """Per-field exact + token recall, plus sample-level mean exact / mean token.
+
+    Per-field ``token`` may be ``None`` when token-overlap is not measurable.
+    ``mean_token`` averages only non-None token values (or ``None`` if none).
+    """
+    per_field: dict[str, dict[str, bool | float | None]] = {
         name: {
             "exact": value_found(value, ocr_text),
             "token": token_recall(value, ocr_text),
@@ -102,8 +108,11 @@ def sample_recall(ocr_text: str, fields: dict[str, str]) -> dict[str, Any]:
     mean_exact = (
         sum(bool(v["exact"]) for v in per_field.values()) / n if n else 0.0
     )
-    mean_token = (
-        sum(float(v["token"]) for v in per_field.values()) / n if n else 0.0
+    token_values = [
+        float(v["token"]) for v in per_field.values() if v["token"] is not None
+    ]
+    mean_token: float | None = (
+        sum(token_values) / len(token_values) if token_values else None
     )
     return {
         "per_field": per_field,
