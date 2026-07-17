@@ -1,0 +1,89 @@
+{
+  "schema": {
+    "fields": [
+      {
+        "name": "name",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "sku",
+        "type": "string"
+      },
+      {
+        "name": "price",
+        "type": "number"
+      },
+      {
+        "name": "currency",
+        "type": "string"
+      },
+      {
+        "name": "unit",
+        "type": "string"
+      },
+      {
+        "name": "brand",
+        "type": "string"
+      },
+      {
+        "name": "category",
+        "type": "string"
+      }
+    ]
+  },
+  "config_path": "examples/retail/demo.yaml",
+  "cases": [
+    {
+      "input_path": "examples/retail/sample_catalog.xlsx",
+      "expected": [
+        {
+          "name": "Arabica Coffee Beans",
+          "sku": "SKU-1001",
+          "price": 12.5,
+          "currency": "USD",
+          "unit": "kg",
+          "brand": "Acme",
+          "category": "Beverages"
+        },
+        {
+          "name": "Green Tea Leaves",
+          "sku": "SKU-1002",
+          "price": 8.0,
+          "currency": "USD",
+          "unit": "box",
+          "brand": "LeafCo",
+          "category": "Beverages"
+        },
+        {
+          "name": "Olive Oil Extra Virgin",
+          "sku": "SKU-1003",
+          "price": 15.99,
+          "currency": "EUR",
+          "unit": "bottle",
+          "brand": "Mediterrana",
+          "category": "Pantry"
+        },
+        {
+          "name": "Sea Salt Flakes",
+          "sku": "SKU-1004",
+          "price": 4.25,
+          "currency": "USD",
+          "unit": "jar",
+          "brand": "Coastal",
+          "category": "Spices"
+        },
+        {
+          "name": "Dark Chocolate Bar",
+          "sku": "SKU-1005",
+          "price": 3.75,
+          "currency": "USD",
+          "unit": "bar",
+          "brand": "CacaoPlus",
+          "category": "Snacks"
+        }
+      ],
+      "key_field": "sku"
+    }
+  ]
+}

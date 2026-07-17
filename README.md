@@ -4,7 +4,7 @@
 
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Tests](https://img.shields.io/badge/tests-76%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-passing-brightgreen)
 ![Lint](https://img.shields.io/badge/lint-ruff-000000)
 
 prismdoc is an **orchestration layer** on top of existing extraction engines (OCR, layout, LLM/VLM).
@@ -173,6 +173,7 @@ src/prismdoc/
   registry.py      # plugin registry
   config.py        # load_pipeline / build_pipeline (YAML)
   cli.py           # `prismdoc` CLI
+  eval/            # offline per-field accuracy harness
   stages/
     ingest.py      # PDF / image / xlsx loaders
     parse.py       # passthrough + Docling OCR
@@ -191,9 +192,22 @@ docs/              # PRD, tech spec, diagrams
 
 ```bash
 pip install -e ".[dev]"
-pytest            # 76 passing
+pytest
 ruff check src tests
 ```
+
+### Eval harness (offline)
+
+After generating the retail sample, measure per-field accuracy against ground truth:
+
+```bash
+python examples/retail/make_sample.py
+python -m prismdoc.eval --dataset examples/eval/retail_dataset.json
+# or: prismdoc-eval --dataset examples/eval/retail_dataset.json
+```
+
+The retail dataset uses the table-extractor pipeline (`examples/retail/demo.yaml`) and
+the known catalog rows, so overall field accuracy is **1.0** offline.
 
 ## Roadmap
 
@@ -201,7 +215,7 @@ ruff check src tests
 - [x] YAML config, CLI, FastAPI + Docker
 - [x] Cost-aware cascade (threshold + fallback)
 - [x] Figure/diagram sub-pipeline
-- [ ] Eval harness (per-field accuracy vs ground truth)
+- [x] Eval harness (per-field accuracy vs ground truth)
 - [ ] Review dashboard / human-in-the-loop
 - [ ] Managed/hosted API (open-core)
 
