@@ -3,7 +3,9 @@
 from prismdoc import registry
 from prismdoc.models import Block, Document, Page, Record, Source
 from prismdoc.pipeline import Pipeline
+from prismdoc.schema import FieldSpec, TargetSchema
 from prismdoc.stages.base import Context, Stage
+from prismdoc.stages.extract import ExtractStage, LLMClient
 from prismdoc.stages.ingest import IngestStage, Loader
 from prismdoc.stages.parse import ParseStage, Parser, PassthroughParser
 
@@ -13,7 +15,10 @@ __all__ = [
     "Block",
     "Context",
     "Document",
+    "ExtractStage",
+    "FieldSpec",
     "IngestStage",
+    "LLMClient",
     "Loader",
     "Page",
     "ParseStage",
@@ -23,6 +28,7 @@ __all__ = [
     "Record",
     "Source",
     "Stage",
+    "TargetSchema",
     "registry",
     "__version__",
     "hello",
