@@ -114,6 +114,35 @@ def test_ingest_unsupported_extension(tmp_path: Path) -> None:
         IngestStage().run(doc, Context())
 
 
+def test_ingest_stage_raises_input_too_large_when_max_pages_exceeded(
+    tmp_path: Path,
+) -> None:
+    from prismdoc import InputTooLargeError
+
+    pdf_path = tmp_path / "many.pdf"
+    _make_pdf(pdf_path, ["page one", "page two", "page three"])
+
+    doc = Document(source=Source(path=str(pdf_path), mime="application/pdf"))
+    ctx = Context(options={"max_pages": 2})
+
+    with pytest.raises(InputTooLargeError, match="3 pages"):
+        IngestStage().run(doc, ctx)
+
+    assert len(doc.pages) == 3
+
+
+def test_ingest_stage_respects_max_pages_when_within_limit(
+    tmp_path: Path,
+) -> None:
+    pdf_path = tmp_path / "ok.pdf"
+    _make_pdf(pdf_path, ["only one"])
+
+    doc = Document(source=Source(path=str(pdf_path), mime="application/pdf"))
+    result = IngestStage().run(doc, Context(options={"max_pages": 2}))
+
+    assert len(result.pages) == 1
+
+
 def test_ingest_exports_and_registry() -> None:
     assert issubclass(IngestStage, object)
     assert issubclass(Loader, object)

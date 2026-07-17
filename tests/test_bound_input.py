@@ -193,10 +193,23 @@ def test_api_oversize_upload_returns_413(
 def test_api_too_many_pages_returns_413(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """Over-max_pages is enforced inside ingest (once), mapped to HTTP 413."""
+    from prismdoc.stages.ingest import PdfLoader
+
     monkeypatch.setenv("PRISMDOC_MAX_PAGES", "2")
     monkeypatch.setenv("PRISMDOC_MAX_UPLOAD_BYTES", str(20 * 1024 * 1024))
     pdf_path = tmp_path / "many.pdf"
     _make_pdf(pdf_path, pages=3, text="page")
+
+    load_calls = 0
+    original_load = PdfLoader.load
+
+    def counting_load(self: PdfLoader, source: Source) -> list:
+        nonlocal load_calls
+        load_calls += 1
+        return original_load(self, source)
+
+    monkeypatch.setattr(PdfLoader, "load", counting_load)
 
     app.dependency_overrides[get_runtime] = _offline_runtime
     try:
@@ -213,3 +226,4 @@ def test_api_too_many_pages_returns_413(
     detail = response.json()["detail"]
     assert "3 pages" in detail
     assert "2 pages" in detail
+    assert load_calls == 1

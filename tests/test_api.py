@@ -250,3 +250,43 @@ def test_health_ok_without_config(monkeypatch: pytest.MonkeyPatch) -> None:
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_extract_runs_pipeline_via_run_in_threadpool(
+    client: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pipeline must leave the event loop via ``run_in_threadpool``."""
+    import sys
+
+    pdf_path = tmp_path / "catalog.pdf"
+    _make_pdf(pdf_path, "Widget A W-001 9.99 USD")
+
+    awaited: list[object] = []
+
+    async def spy_run_in_threadpool(
+        func: object, *args: object, **kwargs: object
+    ) -> object:
+        awaited.append(func)
+        return func(*args, **kwargs)  # type: ignore[operator]
+
+    # ``prismdoc.api.app`` attribute is the FastAPI instance; patch the module.
+    app_module = sys.modules["prismdoc.api.app"]
+    monkeypatch.setattr(app_module, "run_in_threadpool", spy_run_in_threadpool)
+
+    app.dependency_overrides[get_runtime] = _offline_runtime
+    try:
+        with pdf_path.open("rb") as handle:
+            response = client.post(
+                "/extract",
+                files={"file": ("catalog.pdf", handle, "application/pdf")},
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    assert len(awaited) == 1
+    run_fn = awaited[0]
+    assert getattr(run_fn, "__name__", "") == "run"
+    assert isinstance(getattr(run_fn, "__self__", None), Pipeline)

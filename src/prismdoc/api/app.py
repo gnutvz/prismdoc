@@ -9,14 +9,15 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from starlette.concurrency import run_in_threadpool
 
 from prismdoc import __version__
 from prismdoc.config import load_pipeline
 from prismdoc.cost import CostLedger
+from prismdoc.errors import InputTooLargeError
 from prismdoc.models import Document, Source
 from prismdoc.pipeline import Pipeline
 from prismdoc.stages.base import Context
-from prismdoc.stages.ingest import IngestStage
 
 app = FastAPI(
     title="prismdoc",
@@ -84,30 +85,17 @@ async def extract(
         doc = Document(
             source=Source(path=tmp_path, mime=file.content_type),
         )
+        # Per-request context so concurrent extracts do not race on shared options.
+        request_ctx = Context(
+            target_schema=ctx.target_schema,
+            options={**ctx.options, "max_pages": max_pages},
+        )
         try:
-            preview = IngestStage().run(
-                Document(source=Source(path=tmp_path, mime=file.content_type)),
-                ctx,
-            )
+            doc = await run_in_threadpool(pipeline.run, doc, request_ctx)
         except Exception as exc:
             detail = _pipeline_error_detail(exc)
-            raise HTTPException(status_code=422, detail=detail) from None
-
-        page_count = len(preview.pages)
-        if page_count > max_pages:
-            raise HTTPException(
-                status_code=413,
-                detail=(
-                    f"Document has {page_count} pages, which exceeds the limit "
-                    f"of {max_pages} pages"
-                ),
-            )
-
-        try:
-            doc = pipeline.run(doc, ctx)
-        except Exception as exc:
-            detail = _pipeline_error_detail(exc)
-            raise HTTPException(status_code=422, detail=detail) from None
+            status = 413 if _caused_by_input_too_large(exc) else 422
+            raise HTTPException(status_code=status, detail=detail) from None
 
         cost = doc.artifacts.get("cost")
         return {
@@ -136,6 +124,16 @@ def _env_int(name: str, default: int) -> int:
     if raw is None or raw.strip() == "":
         return default
     return int(raw)
+
+
+def _caused_by_input_too_large(exc: BaseException) -> bool:
+    """True if ``exc`` or any ``__cause__`` is an ``InputTooLargeError``."""
+    current: BaseException | None = exc
+    while current is not None:
+        if isinstance(current, InputTooLargeError):
+            return True
+        current = current.__cause__
+    return False
 
 
 def _pipeline_error_detail(exc: BaseException) -> str:

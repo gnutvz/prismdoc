@@ -254,7 +254,7 @@ cleanly when matplotlib is not installed.
 
 ## Roadmap
 
-Done (v0.2.0):
+Done (v0.3.0):
 
 - [x] Core pipeline, ingest/parse/extract/validate/normalize
 - [x] YAML config, CLI, FastAPI + Docker

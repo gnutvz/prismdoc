@@ -9,7 +9,7 @@ import fitz
 from openpyxl import load_workbook
 from PIL import Image
 
-from prismdoc.errors import UnreadableDocumentError
+from prismdoc.errors import InputTooLargeError, UnreadableDocumentError
 from prismdoc.models import Block, Document, Page, Source
 from prismdoc.registry import register
 from prismdoc.stages.base import Context, Stage
@@ -146,6 +146,12 @@ class IngestStage(Stage):
     def run(self, doc: Document, ctx: Context) -> Document:
         loader = self._select_loader(doc.source)
         doc.pages = loader.load(doc.source)
+        max_pages = ctx.options.get("max_pages")
+        if max_pages is not None and len(doc.pages) > max_pages:
+            raise InputTooLargeError(
+                f"Document has {len(doc.pages)} pages, which exceeds the limit "
+                f"of {max_pages} pages"
+            )
         return doc
 
     def _select_loader(self, source: Source) -> Loader:
