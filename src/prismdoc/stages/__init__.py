@@ -5,6 +5,7 @@ from prismdoc.stages.extract import ExtractStage, LLMClient, LiteLLMClient
 from prismdoc.stages.ingest import IngestStage, Loader
 from prismdoc.stages.normalize import NormalizeStage
 from prismdoc.stages.parse import ParseStage, Parser, PassthroughParser
+from prismdoc.stages.table_extract import TableExtractStage
 from prismdoc.stages.validate import ValidateStage
 
 __all__ = [
@@ -19,5 +20,6 @@ __all__ = [
     "Parser",
     "PassthroughParser",
     "Stage",
+    "TableExtractStage",
     "ValidateStage",
 ]

@@ -1,5 +1,9 @@
 """prismdoc — cost-aware, schema-driven document extraction pipeline."""
 
+from __future__ import annotations
+
+from typing import Any
+
 from prismdoc import registry
 from prismdoc.config import build_pipeline, load_pipeline
 from prismdoc.models import Block, Document, Page, Record, Source
@@ -10,6 +14,7 @@ from prismdoc.stages.extract import ExtractStage, LLMClient
 from prismdoc.stages.ingest import IngestStage, Loader
 from prismdoc.stages.normalize import NormalizeStage
 from prismdoc.stages.parse import ParseStage, Parser, PassthroughParser
+from prismdoc.stages.table_extract import TableExtractStage
 from prismdoc.stages.validate import ValidateStage
 
 __version__ = "0.0.0"
@@ -32,14 +37,25 @@ __all__ = [
     "Record",
     "Source",
     "Stage",
+    "TableExtractStage",
     "TargetSchema",
     "ValidateStage",
     "build_pipeline",
+    "cli_main",
     "load_pipeline",
     "registry",
     "__version__",
     "hello",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    # Lazy: avoid importing cli when ``python -m prismdoc.cli`` runs.
+    if name == "cli_main":
+        from prismdoc.cli import main as cli_main
+
+        return cli_main
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def hello() -> str:

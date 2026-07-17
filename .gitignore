@@ -47,3 +47,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Generated retail demo sample (create via examples/retail/make_sample.py)
+examples/retail/sample_catalog.xlsx
+out.csv

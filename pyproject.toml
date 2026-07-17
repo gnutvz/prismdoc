@@ -29,6 +29,9 @@ dev = [
 docling = ["docling"]
 llm = ["litellm"]
 
+[project.scripts]
+prismdoc = "prismdoc.cli:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/prismdoc"]
 
