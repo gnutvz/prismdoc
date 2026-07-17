@@ -103,7 +103,7 @@ def test_pipeline_records_failure_and_reraises() -> None:
 
 def test_registry_register_create_get_keys() -> None:
     # Isolate from other tests that may register keys
-    registry._REGISTRY.clear()  # noqa: SLF001
+    registry.clear()
 
     registry.register("parser.echo", lambda marker="x": EchoStage(marker=marker))
     assert registry.get_keys() == ["parser.echo"]

@@ -12,10 +12,10 @@ from prismdoc.models import Document
 class Context:
     """Shared runtime config for a pipeline run.
 
-    ``schema`` is a placeholder until T-004 introduces a typed target schema.
+    ``target_schema`` is a placeholder until T-004 introduces a typed schema.
     """
 
-    schema: dict | None = None
+    target_schema: dict | None = None
     options: dict = field(default_factory=dict)
 
 
