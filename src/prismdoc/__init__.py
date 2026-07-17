@@ -6,6 +6,7 @@ from typing import Any
 
 from prismdoc import registry
 from prismdoc.config import build_pipeline, load_pipeline
+from prismdoc.cost import BudgetExceededError, estimate_cost, record_cost
 from prismdoc.errors import UnreadableDocumentError
 from prismdoc.models import Block, Document, Page, Record, Source
 from prismdoc.pipeline import Pipeline
@@ -30,6 +31,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "Block",
+    "BudgetExceededError",
     "CascadeStage",
     "Context",
     "Document",
@@ -58,8 +60,10 @@ __all__ = [
     "ValidateStage",
     "build_pipeline",
     "cli_main",
+    "estimate_cost",
     "get_scorer",
     "load_pipeline",
+    "record_cost",
     "register_scorer",
     "registry",
     "__version__",

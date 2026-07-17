@@ -35,6 +35,8 @@ def _print_report(report: EvalReport, *, file: TextIO) -> None:
     print(f"cases: {report.case_count}", file=file)
     print(f"overall_field_accuracy: {report.overall_field_accuracy:.4f}", file=file)
     print(f"escalation_count: {report.escalation_count}", file=file)
+    if report.total_usd or any(r.cost for r in report.case_results):
+        print(f"total_usd: {report.total_usd:.6f}", file=file)
     print(file=file)
 
     if not report.per_field_accuracy:

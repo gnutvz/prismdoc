@@ -25,6 +25,7 @@ class CaseResult(BaseModel):
     metrics: dict[str, Any]
     router: Any | None = None
     tier: str | None = None
+    cost: dict[str, Any] | None = None
 
 
 class EvalReport(BaseModel):
@@ -35,6 +36,7 @@ class EvalReport(BaseModel):
     overall_field_accuracy: float = 0.0
     per_field_accuracy: dict[str, float] = Field(default_factory=dict)
     escalation_count: int = 0
+    total_usd: float = 0.0
 
 
 def run_case(
@@ -53,11 +55,14 @@ def run_case(
 
     router = doc.artifacts.get("router")
     tier = _tier_from_router(router)
+    cost_raw = doc.artifacts.get("cost")
+    cost = cost_raw if isinstance(cost_raw, dict) else None
     return CaseResult(
         input_path=case.input_path,
         metrics=metrics,
         router=router,
         tier=tier,
+        cost=cost,
     )
 
 
@@ -119,6 +124,7 @@ def _aggregate(case_results: list[CaseResult], schema: TargetSchema) -> EvalRepo
             overall_field_accuracy=0.0,
             per_field_accuracy={name: 0.0 for name in schema.field_names()},
             escalation_count=0,
+            total_usd=0.0,
         )
 
     mean_overall = (
@@ -147,6 +153,9 @@ def _aggregate(case_results: list[CaseResult], schema: TargetSchema) -> EvalRepo
     }
 
     escalation_count = sum(1 for result in case_results if _case_escalated(result))
+    total_usd = sum(
+        float((result.cost or {}).get("total_usd", 0.0)) for result in case_results
+    )
 
     return EvalReport(
         case_results=case_results,
@@ -154,4 +163,5 @@ def _aggregate(case_results: list[CaseResult], schema: TargetSchema) -> EvalRepo
         overall_field_accuracy=mean_overall,
         per_field_accuracy=per_field_accuracy,
         escalation_count=escalation_count,
+        total_usd=total_usd,
     )

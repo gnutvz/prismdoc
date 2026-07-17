@@ -7,6 +7,7 @@ import re
 from abc import ABC, abstractmethod
 from typing import Any
 
+from prismdoc.cost import check_budget, record_cost
 from prismdoc.models import Document, Record
 from prismdoc.registry import register
 from prismdoc.schema import TargetSchema
@@ -23,6 +24,9 @@ _FENCE_RE = re.compile(
 class LLMClient(ABC):
     """Minimal interface for prompt completion (injectable for offline tests)."""
 
+    # Implementations set this after ``complete`` when usage is available.
+    last_usage: dict[str, int] | None = None
+
     @abstractmethod
     def complete(self, prompt: str) -> str:
         """Return the model response text for ``prompt``."""
@@ -35,6 +39,7 @@ class LiteLLMClient(LLMClient):
     def __init__(self, model: str = "gpt-4o-mini", **opts: Any) -> None:
         self.model = model
         self.opts = opts
+        self.last_usage: dict[str, int] | None = None
 
     def complete(self, prompt: str) -> str:
         try:
@@ -47,6 +52,16 @@ class LiteLLMClient(LLMClient):
             messages=[{"role": "user", "content": prompt}],
             **self.opts,
         )
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            self.last_usage = {
+                "prompt_tokens": int(getattr(usage, "prompt_tokens", 0) or 0),
+                "completion_tokens": int(
+                    getattr(usage, "completion_tokens", 0) or 0
+                ),
+            }
+        else:
+            self.last_usage = None
         content = response.choices[0].message.content
         if content is None:
             raise ValueError("litellm returned empty message content")
@@ -66,6 +81,7 @@ class ExtractStage(Stage):
         **opts: Any,
     ) -> None:
         self.schema = schema
+        self.model = model
         self.client = (
             client if client is not None else LiteLLMClient(model=model, **opts)
         )
@@ -74,6 +90,21 @@ class ExtractStage(Stage):
         text = doc.artifacts.get("parsed_markdown") or doc.full_text
         prompt = _build_prompt(str(text), self.schema)
         raw = self.client.complete(prompt)
+        usage = self.client.last_usage
+        if usage is not None:
+            model_name = (
+                getattr(self.client, "model", None) or self.model or "default"
+            )
+            record_cost(
+                doc,
+                self.name,
+                str(model_name),
+                int(usage.get("prompt_tokens", 0)),
+                int(usage.get("completion_tokens", 0)),
+            )
+            budget = ctx.options.get("budget_usd")
+            if budget is not None:
+                check_budget(doc, float(budget))
         parsed = _parse_records_json(raw)
         doc.records = [Record(fields=obj) for obj in parsed]
         return doc
