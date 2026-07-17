@@ -48,7 +48,9 @@ class TrackingLLMClient(LLMClient):
         self.response = response
         self.calls = 0
 
-    def complete(self, prompt: str) -> Completion:
+    def complete(
+        self, prompt: str, *, response_format: dict | None = None
+    ) -> Completion:
         self.calls += 1
         return Completion(text=self.response)
 

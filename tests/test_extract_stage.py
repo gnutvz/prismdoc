@@ -47,7 +47,9 @@ class FakeLLMClient(LLMClient):
         self.response = response
         self.prompts: list[str] = []
 
-    def complete(self, prompt: str) -> Completion:
+    def complete(
+        self, prompt: str, *, response_format: dict | None = None
+    ) -> Completion:
         self.prompts.append(prompt)
         return Completion(text=self.response)
 
@@ -101,7 +103,8 @@ def test_extract_stage_populates_records() -> None:
     assert result.records[1].fields["name"] == "Widget B"
     assert result.records[1].fields["sku"] == "W-002"
     assert client.prompts
-    assert "JSON array" in client.prompts[0]
+    assert "records" in client.prompts[0]
+    assert "JSON" in client.prompts[0]
 
 
 def test_extract_parses_json_fenced_response() -> None:
@@ -171,6 +174,78 @@ def test_litellm_client_raises_clear_import_error(
 
     with pytest.raises(ImportError, match=r"prismdoc\[llm\]"):
         LiteLLMClient().complete("hello")
+
+
+def test_target_schema_json_schema() -> None:
+    schema = TargetSchema(
+        fields=[
+            FieldSpec(name="name", type="string", required=True),
+            FieldSpec(name="qty", type="integer", required=True),
+            FieldSpec(name="price", type="number", required=False),
+            FieldSpec(name="active", type="boolean", required=False),
+        ]
+    )
+    js = schema.json_schema()
+
+    assert js["type"] == "object"
+    assert js["required"] == ["records"]
+    records = js["properties"]["records"]
+    assert records["type"] == "array"
+    item = records["items"]
+    assert item["type"] == "object"
+    assert item["properties"] == {
+        "name": {"type": "string"},
+        "qty": {"type": "integer"},
+        "price": {"type": "number"},
+        "active": {"type": "boolean"},
+    }
+    assert item["required"] == ["name", "qty"]
+
+
+def test_extract_parses_structured_records_object() -> None:
+    import json
+
+    payload = json.dumps({"records": _CANNED_PRODUCTS})
+    doc = Document(
+        source=Source(path="/tmp/catalog.md"),
+        artifacts={"parsed_markdown": "catalog text"},
+    )
+    result = ExtractStage(
+        schema=_product_schema(),
+        client=FakeLLMClient(payload),
+    ).run(doc, Context())
+
+    assert len(result.records) == 2
+    assert result.records[0].fields["name"] == "Widget A"
+    assert result.records[1].fields["sku"] == "W-002"
+
+
+def test_extract_passes_response_format_to_client() -> None:
+    class SpyLLMClient(LLMClient):
+        def __init__(self) -> None:
+            self.response_formats: list[dict | None] = []
+
+        def complete(
+            self, prompt: str, *, response_format: dict | None = None
+        ) -> Completion:
+            self.response_formats.append(response_format)
+            import json
+
+            return Completion(text=json.dumps({"records": _CANNED_PRODUCTS}))
+
+    doc = Document(
+        source=Source(path="/tmp/catalog.md"),
+        pages=[Page(index=0, text="Widget A")],
+    )
+    client = SpyLLMClient()
+    ExtractStage(schema=_product_schema(), client=client).run(doc, Context())
+
+    assert len(client.response_formats) == 1
+    rf = client.response_formats[0]
+    assert rf is not None
+    assert rf["type"] == "json_schema"
+    assert rf["json_schema"]["name"] == "records"
+    assert rf["json_schema"]["schema"] == _product_schema().json_schema()
 
 
 def test_extract_exports_and_registry() -> None:

@@ -71,7 +71,9 @@ def _cascade_extract_config() -> dict:
 
 
 class _FakeClient(LLMClient):
-    def complete(self, prompt: str) -> Completion:
+    def complete(
+        self, prompt: str, *, response_format: dict | None = None
+    ) -> Completion:
         return Completion(
             text=json.dumps([{"name": "Widget", "price": 9.99}]),
             usage={"prompt_tokens": 10, "completion_tokens": 5},

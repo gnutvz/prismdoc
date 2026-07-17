@@ -38,7 +38,9 @@ class FakeLLMClient(LLMClient):
     def __init__(self, response: str) -> None:
         self.response = response
 
-    def complete(self, prompt: str) -> Completion:
+    def complete(
+        self, prompt: str, *, response_format: dict | None = None
+    ) -> Completion:
         return Completion(text=self.response)
 
 

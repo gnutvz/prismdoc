@@ -45,8 +45,14 @@ class LLMClient(ABC):
     """Minimal interface for prompt completion (injectable for offline tests)."""
 
     @abstractmethod
-    def complete(self, prompt: str) -> Completion:
-        """Return the model response for ``prompt``."""
+    def complete(
+        self, prompt: str, *, response_format: dict[str, Any] | None = None
+    ) -> Completion:
+        """Return the model response for ``prompt``.
+
+        ``response_format`` is optional structured-output hint (ignored by
+        clients that do not support it).
+        """
         ...
 
 
@@ -95,18 +101,23 @@ class LiteLLMClient(LLMClient):
         self.backoff_base = backoff_base
         self.opts = opts
 
-    def complete(self, prompt: str) -> Completion:
+    def complete(
+        self, prompt: str, *, response_format: dict[str, Any] | None = None
+    ) -> Completion:
         try:
             import litellm
         except ImportError as exc:
             raise ImportError(_LLM_EXTRA_HINT) from exc
 
         def _call() -> Any:
+            kwargs: dict[str, Any] = dict(self.opts)
+            if response_format is not None:
+                kwargs["response_format"] = response_format
             return litellm.completion(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
                 timeout=self.timeout,
-                **self.opts,
+                **kwargs,
             )
 
         response = with_retry(
@@ -175,7 +186,14 @@ class ExtractStage(Stage):
                     f"Projected cost ${projected:.6f} exceeds budget "
                     f"${budget_usd:.6f}"
                 )
-        completion = self.client.complete(prompt)
+        response_format: dict[str, Any] = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "records",
+                "schema": self.schema.json_schema(),
+            },
+        }
+        completion = self.client.complete(prompt, response_format=response_format)
         model_name = str(
             completion.model
             or getattr(self.client, "model", None)
@@ -194,7 +212,9 @@ class ExtractStage(Stage):
                 check_budget(doc, float(budget))
         else:
             record_unmetered(doc, self.name, model_name)
-        parsed = _parse_records_json(completion.text)
+        parsed = _parse_structured_records(completion.text)
+        if parsed is None:
+            parsed = _parse_records_json(completion.text)
         doc.records = [Record(fields=obj) for obj in parsed]
         return doc
 
@@ -218,16 +238,39 @@ def _build_prompt(text: str, schema: TargetSchema) -> str:
     fields_desc = schema.describe() or "(no fields defined)"
     names = ", ".join(schema.field_names()) or "(none)"
     return (
-        "Extract ALL records from the document below as a JSON array.\n"
+        "Extract ALL records from the document below and return them as JSON.\n"
+        "Respond with a JSON object whose \"records\" value is an array.\n"
         "Each element must be an object with exactly these fields: "
         f"{names}.\n"
         "Field specifications:\n"
         f"{fields_desc}\n\n"
-        "Return ONLY a JSON array (no commentary). Example shape: "
-        '[{"field": "value"}, ...].\n\n'
+        "Return ONLY JSON (no commentary). Example shape: "
+        '{"records": [{"field": "value"}, ...]}.\n\n'
         "Document:\n"
         f"{text}"
     )
+
+
+def _parse_structured_records(raw: str) -> list[dict[str, Any]] | None:
+    """Parse ``{"records": [...]}``; return None if shape does not match."""
+    try:
+        data = json.loads(raw.strip())
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    records = data.get("records")
+    if not isinstance(records, list):
+        return None
+    out: list[dict[str, Any]] = []
+    for item in records:
+        if not isinstance(item, dict):
+            raise ValueError(
+                "Extract stage expected records to be objects; "
+                f"got element of type {type(item).__name__}"
+            )
+        out.append(item)
+    return out
 
 
 def _parse_records_json(raw: str) -> list[dict[str, Any]]:

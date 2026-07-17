@@ -2,9 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
+
+_JSON_TYPES: dict[str, str] = {
+    "string": "string",
+    "integer": "integer",
+    "number": "number",
+    "boolean": "boolean",
+}
 
 
 class FieldSpec(BaseModel):
@@ -33,3 +40,26 @@ class TargetSchema(BaseModel):
             desc = field.description.strip() or "(no description)"
             lines.append(f"- {field.name} ({field.type}, {req}): {desc}")
         return "\n".join(lines)
+
+    def json_schema(self) -> dict[str, Any]:
+        """Build a JSON Schema for ``{"records": [record, ...]}``."""
+        properties: dict[str, dict[str, str]] = {}
+        required: list[str] = []
+        for field in self.fields:
+            properties[field.name] = {"type": _JSON_TYPES[field.type]}
+            if field.required:
+                required.append(field.name)
+        return {
+            "type": "object",
+            "properties": {
+                "records": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": properties,
+                        "required": required,
+                    },
+                }
+            },
+            "required": ["records"],
+        }

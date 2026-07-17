@@ -57,7 +57,9 @@ class UsageLLMClient(LLMClient):
         if model is not None:
             self.model = model
 
-    def complete(self, prompt: str) -> Completion:
+    def complete(
+        self, prompt: str, *, response_format: dict | None = None
+    ) -> Completion:
         return Completion(
             text=self.response,
             usage={
@@ -233,7 +235,9 @@ def test_extract_stage_surfaces_budget_exceeded() -> None:
 
 def test_extract_without_usage_records_unmetered() -> None:
     class NoUsageClient(LLMClient):
-        def complete(self, prompt: str) -> Completion:
+        def complete(
+            self, prompt: str, *, response_format: dict | None = None
+        ) -> Completion:
             return Completion(text=json.dumps(_CANNED), model="gpt-4o-mini")
 
     doc = Document(

@@ -124,7 +124,9 @@ def test_run_eval_mock_llm_wrong_field_matches_error(tmp_path: Path) -> None:
     predicted_payload = [{"name": "Widget", "sku": "W-1", "price": 9.99}]
 
     class FakeClient(LLMClient):
-        def complete(self, prompt: str) -> Completion:
+        def complete(
+            self, prompt: str, *, response_format: dict | None = None
+        ) -> Completion:
             return Completion(text=json.dumps(predicted_payload))
 
     config = {
