@@ -141,3 +141,38 @@ Reading:
 
 **Caveat:** n = 5 is tiny — directional only. A credible benchmark needs **n = 50+** and a
 **threshold sweep for the accuracy-vs-USD frontier** (now feasible with the free CLI backends).
+
+## Cost-aware cascade frontier
+
+The point of the whole project: run a cheap model, and **escalate only the hard cases to a strong,
+expensive model**. Here the cascade is `gemini-3-flash → claude-opus`, escalating a receipt when the
+cheap model's output is poorly **grounded** in the OCR text (a proxy for "the cheap answer is shaky").
+Both models were run once per receipt and the cascade simulated at several grounding thresholds.
+
+**n = 42 SROIE receipts.** Cost is **estimated** (hypothetical API prices — the CLI backends are
+actually free via Claude Max / Cursor Pro): gemini-flash ≈ $0.10/$0.40 per 1M in/out,
+opus ≈ $15/$75 per 1M.
+
+![Cost-aware cascade frontier](img/frontier.png)
+
+| Escalation threshold | % escalated | accuracy | est. cost / batch |
+|----------------------|-------------|----------|-------------------|
+| 0.00 (cheap only)    | 0%          | 0.774    | $0.0037           |
+| 0.26                 | 5%          | 0.774    | $0.027            |
+| 0.51                 | 19%         | 0.780    | $0.091            |
+| 0.76                 | 60%         | 0.798    | $0.319            |
+| 1.01 (strong only)   | 100%        | **0.839**| $0.563            |
+
+**Reading the frontier:**
+
+- The cheap model alone (gemini-3-flash) already reaches **77.4%** at near-zero cost.
+- Sending **everything** to opus reaches **83.9%** — **+6.5 points** — but costs **~152×** more.
+- Grounding-based escalation is a real Pareto curve: accuracy rises monotonically as you escalate more.
+  Escalating just the **19%** lowest-grounding receipts buys most of the low-hanging gain; the last few
+  points cost the most. That gap is exactly the money the cost-aware cascade lets you *not* spend —
+  pick the threshold that fits your accuracy/cost budget instead of paying for the strong model on
+  every document.
+
+**Caveats:** n = 42 (still preliminary, ±0.1); costs are estimated at reference API prices; grounding
+is a heuristic escalation signal (not calibrated). Reproduce with `prismdoc.eval.sweep` on a cascade
+config once a hosted model is wired.
