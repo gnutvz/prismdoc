@@ -6,6 +6,7 @@ from typing import Any
 
 from prismdoc import registry
 from prismdoc.config import build_pipeline, load_pipeline
+from prismdoc.errors import UnreadableDocumentError
 from prismdoc.models import Block, Document, Page, Record, Source
 from prismdoc.pipeline import Pipeline
 from prismdoc.schema import FieldSpec, TargetSchema
@@ -39,6 +40,7 @@ __all__ = [
     "Stage",
     "TableExtractStage",
     "TargetSchema",
+    "UnreadableDocumentError",
     "ValidateStage",
     "build_pipeline",
     "cli_main",
