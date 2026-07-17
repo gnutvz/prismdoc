@@ -108,5 +108,32 @@ that fits each field:
 **Takeaway:** on real scanned receipts, Docling OCR recovers the key fields well — ~95% for atomic
 fields (date, total) and ~75–84% token-recall for long fields (company, address). The remaining work
 is *extraction*: mapping this OCR text into exact schema values (where the LLM + grounding confidence +
-eval come in). This is the parse-layer upper bound; end-to-end extraction accuracy (model vs ground
-truth, with the accuracy-vs-USD frontier) is the next benchmark and needs a model.
+eval come in). This is the parse-layer upper bound.
+
+## Extraction accuracy (end-to-end, multi-model)
+
+Full pipeline — SROIE image → Docling OCR → LLM extract → compare vs ground truth (type-aware
+`values_match`). Model backends run via **CLI subscriptions, no API cost**: Claude Max (`claude -p`)
+and Cursor Pro (`cursor-agent -p`). `tok/doc` is a cost proxy (the CLI returns no usage, so cost is
+unmetered).
+
+Preliminary — **n = 5 receipts** (expect ±0.2 at this size):
+
+| Model          | company | date | address | total | tok/doc |
+|----------------|---------|------|---------|-------|---------|
+| claude-sonnet  | 0.00\*  | 1.00 | 0.00\*  | 1.00  | 522     |
+| gpt-5.3-codex  | 0.20\*  | 0.80 | 0.00\*  | 1.00  | 516     |
+| gemini-3-flash | 0.20\*  | 1.00 | 0.00\*  | 1.00  | 535     |
+| grok-4.5       | 0.20\*  | 1.00 | 0.00\*  | 1.00  | 516     |
+
+\* `company` / `address` are scored by **strict exact-string** match, which penalizes formatting. The
+models actually extract these correctly — e.g. pred `BOOK TAK(TAMAN DAYA)SDN BHD` vs GT
+`BOOK TA .K (TAMAN DAYA) SDN BHD` (same content, different spacing/punctuation). So `0.00` here is a
+**metric artifact**, not a model failure — the same long-field strictness seen in OCR-recall above.
+
+**Trustworthy signal:** atomic fields — **date and total — are extracted ~perfectly (0.8–1.0) by all
+four models**. At n = 5 the models are within noise of each other; token/doc (~520) is comparable.
+
+**Next metric fix:** the eval's string comparison needs a fair (token / punctuation-insensitive) match
+for long fields before company/address accuracy is meaningful — and a larger n (50+) with a
+threshold-sweep for the accuracy-vs-USD frontier.
