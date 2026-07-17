@@ -29,7 +29,7 @@ from prismdoc.stages.parse import ParseStage, Parser, PassthroughParser
 from prismdoc.stages.table_extract import TableExtractStage
 from prismdoc.stages.validate import ValidateStage
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "Block",

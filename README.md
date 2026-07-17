@@ -41,8 +41,31 @@ sub-pipeline, and three ways to run it (library, CLI, microservice).
 | **Ingest** | PDF (PyMuPDF), images (Pillow), spreadsheets (openpyxl) |
 | **Parse** | Passthrough (offline) or Docling OCR (optional) |
 | **Validate + Normalize** | Required-field checks, type coercion, whitespace/dedup cleanup |
+| **Confidence per field** | Per-field confidence + low-confidence flags in the output |
+| **Cost ledger** | Real per-stage token/USD accounting + optional per-request budget |
+| **Eval harness** | Per-field accuracy vs ground truth (`prismdoc-eval`) |
+| **LLM resilience** | Timeout + retry/backoff around the model call |
 | **Graceful errors** | Encrypted/corrupt documents fail with a clear typed error |
 | **Serving** | FastAPI `POST /extract` + `GET /health`, Dockerfile + compose |
+
+---
+
+## Scope: a focused microservice, not a platform
+
+prismdoc does **one thing well — the document-extraction workflow** — and stays a **stateless,
+embeddable microservice**. It deliberately does **not** bake in platform concerns, so you can drop it
+into your own infrastructure without fighting its opinions.
+
+| prismdoc owns (in this repo) | You own (at deploy time) |
+|---|---|
+| Ingest → cascade parse/OCR → figures → extract → validate → normalize | Scaling: queue, worker pool, autoscaling (put it behind your own) |
+| Cost-aware routing + per-request cost ledger | Persistence: job store, artifact store (S3/DB) |
+| Per-field confidence + low-confidence flags | Caching/idempotency (recommended: key by document content-hash at your gateway) |
+| Schema-driven extraction + validation | Multi-tenancy, quotas, auth |
+| Eval harness, LLM retry/timeout | Review UI / human-in-the-loop, dashboards, OTel wiring |
+
+This boundary is the point: no lock-in, easy to self-host (the offline path needs no API key), and it
+composes with whatever queue/store/observability stack you already run.
 
 ---
 
@@ -211,13 +234,26 @@ the known catalog rows, so overall field accuracy is **1.0** offline.
 
 ## Roadmap
 
+Done (v0.2.0):
+
 - [x] Core pipeline, ingest/parse/extract/validate/normalize
 - [x] YAML config, CLI, FastAPI + Docker
 - [x] Cost-aware cascade (threshold + fallback)
 - [x] Figure/diagram sub-pipeline
 - [x] Eval harness (per-field accuracy vs ground truth)
-- [ ] Review dashboard / human-in-the-loop
-- [ ] Managed/hosted API (open-core)
+- [x] Cost ledger (per-stage token/USD accounting + budget)
+- [x] Per-field confidence + low-confidence flags
+- [x] LLM resilience (timeout + retry/backoff)
+
+Next (still in-scope for a focused workflow service):
+
+- [ ] More parser/extractor engines behind the existing interfaces
+- [ ] Richer scorers for the cascade (quality signals beyond text length)
+- [ ] Published cost/accuracy benchmark on a public receipt/invoice set
+
+Out of scope by design — see [Scope](#scope-a-focused-microservice-not-a-platform); these belong to
+whoever deploys prismdoc: async job queues, persistence/resume, multi-tenancy, review dashboards,
+metrics/OTel infrastructure.
 
 ## License
 
