@@ -51,3 +51,6 @@ Thumbs.db
 # Generated retail demo sample (create via examples/retail/make_sample.py)
 examples/retail/sample_catalog.xlsx
 out.csv
+
+# Internal build/orchestration tooling (kept local, not part of the product)
+orchestrate/
