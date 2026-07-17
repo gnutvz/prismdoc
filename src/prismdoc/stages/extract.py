@@ -11,9 +11,11 @@ from pydantic import BaseModel
 
 from prismdoc.cost import (
     BudgetExceededError,
+    CostLedger,
     check_budget,
     estimate_cost,
     record_cost,
+    record_unmetered,
 )
 from prismdoc.errors import InputTooLargeError
 from prismdoc.models import Document, Record
@@ -174,23 +176,24 @@ class ExtractStage(Stage):
                     f"${budget_usd:.6f}"
                 )
         completion = self.client.complete(prompt)
+        model_name = str(
+            completion.model
+            or getattr(self.client, "model", None)
+            or self.model
+        )
         usage = completion.usage
         if usage is not None:
-            model_name = (
-                completion.model
-                or getattr(self.client, "model", None)
-                or self.model
-                or "default"
-            )
             record_cost(
                 doc,
                 self.name,
-                str(model_name),
+                model_name,
                 int(usage.get("prompt_tokens", 0)),
                 int(usage.get("completion_tokens", 0)),
             )
             if budget is not None:
                 check_budget(doc, float(budget))
+        else:
+            record_unmetered(doc, self.name, model_name)
         parsed = _parse_records_json(completion.text)
         doc.records = [Record(fields=obj) for obj in parsed]
         return doc
@@ -204,10 +207,11 @@ def _projected_cost(
 ) -> float:
     """Estimate total USD if the upcoming call is charged on top of the ledger."""
     ledger = doc.artifacts.get("cost")
-    current = (
-        float(ledger.get("total_usd", 0.0)) if isinstance(ledger, dict) else 0.0
-    )
-    return current + estimate_cost(model, tokens_in, expected_output_tokens)
+    current = ledger.total_usd if isinstance(ledger, CostLedger) else 0.0
+    upcoming = estimate_cost(model, tokens_in, expected_output_tokens)
+    if upcoming is None:
+        return current
+    return current + upcoming
 
 
 def _build_prompt(text: str, schema: TargetSchema) -> str:

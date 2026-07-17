@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from prismdoc.config import load_pipeline
+from prismdoc.cost import CostLedger
 from prismdoc.eval.dataset import EvalCase, EvalDataset
 from prismdoc.eval.metrics import align_records, field_metrics
 from prismdoc.models import Document, Source
@@ -56,7 +57,7 @@ def run_case(
     router = doc.artifacts.get("router")
     tier = _tier_from_router(router)
     cost_raw = doc.artifacts.get("cost")
-    cost = cost_raw if isinstance(cost_raw, dict) else None
+    cost = cost_raw.model_dump() if isinstance(cost_raw, CostLedger) else None
     return CaseResult(
         input_path=case.input_path,
         metrics=metrics,
@@ -153,9 +154,11 @@ def _aggregate(case_results: list[CaseResult], schema: TargetSchema) -> EvalRepo
     }
 
     escalation_count = sum(1 for result in case_results if _case_escalated(result))
-    total_usd = sum(
-        float((result.cost or {}).get("total_usd", 0.0)) for result in case_results
-    )
+    total_usd = 0.0
+    for result in case_results:
+        if result.cost is None:
+            continue
+        total_usd += float(result.cost.get("total_usd", 0.0))
 
     return EvalReport(
         case_results=case_results,

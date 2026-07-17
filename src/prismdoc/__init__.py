@@ -6,7 +6,7 @@ from typing import Any
 
 from prismdoc import registry
 from prismdoc.config import build_pipeline, load_pipeline
-from prismdoc.cost import BudgetExceededError, estimate_cost, record_cost
+from prismdoc.cost import BudgetExceededError, CostLedger, estimate_cost, record_cost
 from prismdoc.errors import InputTooLargeError, UnreadableDocumentError
 from prismdoc.models import Block, Document, Page, Record, Source
 from prismdoc.pipeline import Pipeline
@@ -37,6 +37,7 @@ __all__ = [
     "CascadeStage",
     "ConfidenceStage",
     "Context",
+    "CostLedger",
     "Document",
     "ExtractStage",
     "FieldSpec",

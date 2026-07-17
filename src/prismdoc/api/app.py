@@ -12,6 +12,7 @@ from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 
 from prismdoc import __version__
 from prismdoc.config import load_pipeline
+from prismdoc.cost import CostLedger
 from prismdoc.models import Document, Source
 from prismdoc.pipeline import Pipeline
 from prismdoc.stages.base import Context
@@ -108,6 +109,7 @@ async def extract(
             detail = _pipeline_error_detail(exc)
             raise HTTPException(status_code=422, detail=detail) from None
 
+        cost = doc.artifacts.get("cost")
         return {
             "records": [record.fields for record in doc.records],
             "validation": doc.artifacts.get("validation"),
@@ -122,6 +124,7 @@ async def extract(
                 }
                 for entry in doc.trace
             ],
+            "cost": cost.model_dump() if isinstance(cost, CostLedger) else cost,
         }
     finally:
         if tmp_path is not None:

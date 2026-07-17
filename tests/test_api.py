@@ -148,6 +148,10 @@ def test_extract_with_fake_runtime_pdf(
     ]
     assert all(entry["ok"] for entry in body["trace"])
     assert all("duration_ms" in entry for entry in body["trace"])
+    assert "cost" in body
+    assert isinstance(body["cost"], dict)
+    assert body["cost"]["unmetered_calls"] == 1
+    assert body["cost"]["total_usd"] == 0.0
 
 
 def test_extract_with_fake_runtime_xlsx(

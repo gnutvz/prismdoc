@@ -1,4 +1,4 @@
-"""Tests for T-013 cost ledger (token/$ accounting + optional budget)."""
+"""Tests for honest cost ledger (typed CostLedger + unpriced/unmetered)."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import pytest
 from prismdoc import (
     BudgetExceededError,
     Context,
+    CostLedger,
     Document,
     ExtractStage,
     FieldSpec,
@@ -20,10 +21,10 @@ from prismdoc import (
     estimate_cost,
     record_cost,
 )
-from prismdoc.cost import PRICING, check_budget
-from prismdoc.stages.extract import Completion
+from prismdoc.cost import PRICING, StageCost, check_budget, record_unmetered
 from prismdoc.eval.dataset import load_dataset
 from prismdoc.eval.runner import run_eval
+from prismdoc.stages.extract import Completion
 
 
 def _product_schema() -> TargetSchema:
@@ -67,31 +68,88 @@ class UsageLLMClient(LLMClient):
         )
 
 
-def test_estimate_cost_known_model() -> None:
+def test_estimate_cost_known_model_local_table() -> None:
     tokens_in, tokens_out = 1000, 500
     per_in, per_out = PRICING["gpt-4o-mini"]
     expected = (tokens_in / 1000.0) * per_in + (tokens_out / 1000.0) * per_out
 
-    assert estimate_cost("gpt-4o-mini", tokens_in, tokens_out) == pytest.approx(
-        expected
-    )
+    assert estimate_cost(
+        "gpt-4o-mini", tokens_in, tokens_out, pricing=PRICING
+    ) == pytest.approx(expected)
 
 
 def test_estimate_cost_bedrock_prefix_normalizes() -> None:
     tokens_in, tokens_out = 2000, 1000
-    direct = estimate_cost("anthropic.claude-3-5-sonnet", tokens_in, tokens_out)
+    direct = estimate_cost(
+        "anthropic.claude-3-5-sonnet", tokens_in, tokens_out, pricing=PRICING
+    )
     prefixed = estimate_cost(
-        "bedrock/anthropic.claude-3-5-sonnet", tokens_in, tokens_out
+        "bedrock/anthropic.claude-3-5-sonnet",
+        tokens_in,
+        tokens_out,
+        pricing=PRICING,
     )
     assert prefixed == pytest.approx(direct)
 
 
-def test_estimate_cost_unknown_model_uses_default() -> None:
-    tokens_in, tokens_out = 1000, 1000
-    expected = estimate_cost("default", tokens_in, tokens_out)
-    assert estimate_cost("totally-unknown-model-xyz", tokens_in, tokens_out) == (
-        pytest.approx(expected)
+def test_estimate_cost_unknown_model_returns_none() -> None:
+    assert (
+        estimate_cost(
+            "totally-unknown-model-xyz",
+            1000,
+            1000,
+            pricing=PRICING,
+        )
+        is None
     )
+
+
+def test_record_cost_known_model_sets_usd_and_total() -> None:
+    doc = Document(source=Source(path="/tmp/x.md"))
+    tokens_in, tokens_out = 1000, 200
+    expected = estimate_cost("gpt-4o-mini", tokens_in, tokens_out)
+    assert expected is not None
+
+    record_cost(doc, "extract", "gpt-4o-mini", tokens_in, tokens_out)
+
+    cost = doc.artifacts["cost"]
+    assert isinstance(cost, CostLedger)
+    stage = cost.by_stage["extract"]
+    assert isinstance(stage, StageCost)
+    assert stage.usd is not None
+    assert stage.usd == pytest.approx(expected)
+    assert stage.unpriced is False
+    assert cost.total_usd == pytest.approx(expected)
+    assert cost.unpriced_calls == 0
+
+
+def test_record_cost_unknown_model_is_unpriced() -> None:
+    doc = Document(source=Source(path="/tmp/x.md"))
+    record_cost(doc, "extract", "totally-unknown-model-xyz", 1000, 100)
+
+    cost = doc.artifacts["cost"]
+    assert isinstance(cost, CostLedger)
+    stage = cost.by_stage["extract"]
+    assert stage.usd is None
+    assert stage.unpriced is True
+    assert cost.unpriced_calls == 1
+    assert cost.total_usd == 0.0
+    assert cost.tokens_in == 1000
+    assert cost.tokens_out == 100
+
+
+def test_record_unmetered_marks_ledger() -> None:
+    doc = Document(source=Source(path="/tmp/x.md"))
+    record_cost(doc, "extract", "gpt-4o-mini", 1000, 100)
+    before = doc.artifacts["cost"].total_usd
+
+    record_unmetered(doc, "extract", "gpt-4o-mini")
+
+    cost = doc.artifacts["cost"]
+    assert isinstance(cost, CostLedger)
+    assert cost.by_stage["extract"].unmetered is True
+    assert cost.unmetered_calls == 1
+    assert cost.total_usd == pytest.approx(before)
 
 
 def test_extract_stage_records_cost_from_completion_usage() -> None:
@@ -113,14 +171,16 @@ def test_extract_stage_records_cost_from_completion_usage() -> None:
     ).run(doc, Context())
 
     cost = result.artifacts["cost"]
+    assert isinstance(cost, CostLedger)
     expected_usd = estimate_cost("gpt-4o-mini", tokens_in, tokens_out)
-    assert cost["total_usd"] == pytest.approx(expected_usd)
-    assert cost["tokens_in"] == tokens_in
-    assert cost["tokens_out"] == tokens_out
-    assert cost["by_stage"]["extract"]["usd"] == pytest.approx(expected_usd)
-    assert cost["by_stage"]["extract"]["tokens_in"] == tokens_in
-    assert cost["by_stage"]["extract"]["tokens_out"] == tokens_out
-    assert cost["by_stage"]["extract"]["model"] == "gpt-4o-mini"
+    assert expected_usd is not None
+    assert cost.total_usd == pytest.approx(expected_usd)
+    assert cost.tokens_in == tokens_in
+    assert cost.tokens_out == tokens_out
+    assert cost.by_stage["extract"].usd == pytest.approx(expected_usd)
+    assert cost.by_stage["extract"].tokens_in == tokens_in
+    assert cost.by_stage["extract"].tokens_out == tokens_out
+    assert cost.by_stage["extract"].model == "gpt-4o-mini"
 
 
 def test_record_cost_accumulates_same_stage_twice() -> None:
@@ -129,20 +189,25 @@ def test_record_cost_accumulates_same_stage_twice() -> None:
     record_cost(doc, "extract", "gpt-4o-mini", 500, 50)
 
     cost = doc.artifacts["cost"]
-    expected = estimate_cost("gpt-4o-mini", 1500, 150)
-    assert cost["tokens_in"] == 1500
-    assert cost["tokens_out"] == 150
-    assert cost["total_usd"] == pytest.approx(expected)
-    assert cost["by_stage"]["extract"]["tokens_in"] == 1500
-    assert cost["by_stage"]["extract"]["tokens_out"] == 150
-    assert cost["by_stage"]["extract"]["usd"] == pytest.approx(expected)
+    assert isinstance(cost, CostLedger)
+    first = estimate_cost("gpt-4o-mini", 1000, 100)
+    second = estimate_cost("gpt-4o-mini", 500, 50)
+    assert first is not None and second is not None
+    expected = first + second
+    assert cost.tokens_in == 1500
+    assert cost.tokens_out == 150
+    assert cost.total_usd == pytest.approx(expected)
+    assert cost.by_stage["extract"].tokens_in == 1500
+    assert cost.by_stage["extract"].tokens_out == 150
+    assert cost.by_stage["extract"].usd == pytest.approx(expected)
 
 
 def test_check_budget_raises_when_exceeded() -> None:
     doc = Document(source=Source(path="/tmp/x.md"))
     record_cost(doc, "extract", "gpt-4o", 100_000, 50_000)
-    total = float(doc.artifacts["cost"]["total_usd"])
-    assert total > 0.01
+    cost = doc.artifacts["cost"]
+    assert isinstance(cost, CostLedger)
+    assert cost.total_usd > 0.01
 
     with pytest.raises(BudgetExceededError):
         check_budget(doc, 0.01)
@@ -166,10 +231,10 @@ def test_extract_stage_surfaces_budget_exceeded() -> None:
         stage.run(doc, ctx)
 
 
-def test_extract_without_usage_records_no_cost() -> None:
+def test_extract_without_usage_records_unmetered() -> None:
     class NoUsageClient(LLMClient):
         def complete(self, prompt: str) -> Completion:
-            return Completion(text=json.dumps(_CANNED))
+            return Completion(text=json.dumps(_CANNED), model="gpt-4o-mini")
 
     doc = Document(
         source=Source(path="/tmp/catalog.md"),
@@ -178,9 +243,15 @@ def test_extract_without_usage_records_no_cost() -> None:
     result = ExtractStage(
         schema=_product_schema(),
         client=NoUsageClient(),
+        model="gpt-4o-mini",
     ).run(doc, Context())
 
-    assert "cost" not in result.artifacts
+    cost = result.artifacts["cost"]
+    assert isinstance(cost, CostLedger)
+    assert cost.unmetered_calls == 1
+    assert cost.by_stage["extract"].unmetered is True
+    assert cost.by_stage["extract"].usd is None
+    assert cost.total_usd == 0.0
 
 
 def test_cost_symbols_exported_from_prismdoc() -> None:
@@ -189,6 +260,7 @@ def test_cost_symbols_exported_from_prismdoc() -> None:
     assert callable(prismdoc.estimate_cost)
     assert callable(prismdoc.record_cost)
     assert issubclass(prismdoc.BudgetExceededError, Exception)
+    assert prismdoc.CostLedger is CostLedger
 
 
 def test_eval_report_total_usd_zero_for_offline_table(tmp_path: Path) -> None:
