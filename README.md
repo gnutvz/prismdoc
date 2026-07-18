@@ -133,6 +133,25 @@ Real behaviour (offline, from `examples/retail/pipeline_cascade.yaml`):
 
 The same pattern applies to extraction (cheap model → strong model) via injectable LLM clients.
 
+## Benchmarks
+
+Real evidence on public scanned receipts (**SROIE**), not synthetic self-tests — see
+**[docs/BENCHMARK.md](docs/BENCHMARK.md)** for full methodology, numbers, and caveats.
+
+**Cost-aware cascade frontier** — a cheap model (`gemini-3-flash`) with the hard, low-grounding cases
+escalated to a strong model (`claude-opus`):
+
+![Cost-aware cascade frontier](docs/img/frontier.png)
+
+- The cheap model **alone** already gets most of the way, at near-zero cost.
+- Sending **everything** to the strong model adds only a few accuracy points — at **~150× the cost**.
+- The cascade lets you buy the intermediate points: escalate just the shakiest cases and capture most
+  of the gain for a fraction of the spend. That gap is the money the cost-aware routing saves.
+
+Also benchmarked (in `docs/BENCHMARK.md`): OCR-recall of the parse layer, and end-to-end extraction
+accuracy across four model providers (Claude / GPT / Gemini / Grok). Numbers are preliminary and
+honestly caveated (sample size, estimated prices, heuristic escalation signal).
+
 ## Figure / diagram sub-pipeline
 
 Documents with embedded images/diagrams are handled on a side path:
@@ -263,14 +282,15 @@ Done (v0.3.0):
 - [x] Eval harness (type-aware per-field accuracy vs ground truth)
 - [x] Threshold-sweep accuracy/USD frontier (`prismdoc-sweep`)
 - [x] Cost ledger (per-stage token/USD accounting + budget)
-- [x] Per-field confidence + low-confidence flags
+- [x] Per-field confidence + low-confidence flags (grounding-based)
 - [x] LLM resilience (timeout + retry/backoff)
+- [x] Public SROIE benchmark: OCR-recall, multi-model extraction, cost/accuracy frontier
 
 Next (still in-scope for a focused workflow service):
 
 - [ ] More parser/extractor engines behind the existing interfaces
 - [ ] Richer scorers for the cascade (quality signals beyond text length)
-- [ ] Published cost/accuracy benchmark on a public receipt/invoice set
+- [ ] Scale the benchmark (larger n) + calibrate confidence against measured accuracy
 
 Out of scope by design — see [Scope](#scope-a-focused-microservice-not-a-platform); these belong to
 whoever deploys prismdoc: async job queues, persistence/resume, multi-tenancy, review dashboards,
