@@ -32,11 +32,20 @@ class Page(BaseModel):
     image_ref: str | None = None
 
 
+class FieldProvenance(BaseModel):
+    """Where an extracted field value was located in the source document."""
+
+    page: int | None = None
+    bbox: tuple[float, float, float, float] | None = None
+    source_text: str = ""
+
+
 class Record(BaseModel):
     """One extracted structured record."""
 
     fields: dict[str, Any]
     confidence: dict[str, float] = Field(default_factory=dict)
+    provenance: dict[str, FieldProvenance] = Field(default_factory=dict)
 
 
 class TraceEntry(BaseModel):

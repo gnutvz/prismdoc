@@ -8,7 +8,7 @@ from prismdoc import registry
 from prismdoc.config import build_pipeline, load_pipeline
 from prismdoc.cost import BudgetExceededError, CostLedger, estimate_cost, record_cost
 from prismdoc.errors import InputTooLargeError, UnreadableDocumentError
-from prismdoc.models import Block, Document, Page, Record, Source
+from prismdoc.models import Block, Document, FieldProvenance, Page, Record, Source
 from prismdoc.pipeline import Pipeline
 from prismdoc.resilience import with_retry
 from prismdoc.schema import FieldSpec, TargetSchema
@@ -26,6 +26,7 @@ from prismdoc.stages.figures import (
 from prismdoc.stages.ingest import IngestStage, Loader
 from prismdoc.stages.normalize import NormalizeStage
 from prismdoc.stages.parse import ParseStage, Parser, PassthroughParser
+from prismdoc.stages.provenance import ProvenanceStage
 from prismdoc.stages.rules import RuleValidateStage, get_rule, register_rule
 from prismdoc.stages.table_extract import TableExtractStage
 from prismdoc.stages.validate import ValidateStage
@@ -41,6 +42,7 @@ __all__ = [
     "CostLedger",
     "Document",
     "ExtractStage",
+    "FieldProvenance",
     "FieldSpec",
     "Figure",
     "FigureExtractStage",
@@ -57,6 +59,7 @@ __all__ = [
     "Parser",
     "PassthroughParser",
     "Pipeline",
+    "ProvenanceStage",
     "Record",
     "RuleValidateStage",
     "Source",

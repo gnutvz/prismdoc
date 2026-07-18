@@ -104,6 +104,13 @@ async def extract(
             "normalize": doc.artifacts.get("normalize"),
             "confidence": [record.confidence for record in doc.records],
             "low_confidence": doc.artifacts.get("low_confidence"),
+            "provenance": [
+                {
+                    field: prov.model_dump()
+                    for field, prov in record.provenance.items()
+                }
+                for record in doc.records
+            ],
             "trace": [
                 {
                     "stage": entry.stage,
