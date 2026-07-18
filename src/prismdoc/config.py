@@ -239,6 +239,7 @@ def _ensure_plugins() -> None:
     from prismdoc.stages.cascade import register_plugins as register_cascade
     from prismdoc.stages.chunked_extract import register_plugins as register_chunked
     from prismdoc.stages.confidence import register_plugins as register_confidence
+    from prismdoc.stages.ensemble import register_plugins as register_ensemble
     from prismdoc.stages.extract import register_plugins as register_extract
     from prismdoc.stages.figures import register_plugins as register_figures
     from prismdoc.stages.ingest import register_plugins as register_ingest
@@ -254,6 +255,7 @@ def _ensure_plugins() -> None:
     register_figures()
     register_extract()
     register_chunked()
+    register_ensemble()
     register_table_extract()
     register_validate()
     register_normalize()
