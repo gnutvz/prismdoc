@@ -3,7 +3,9 @@
 from prismdoc.stages.base import Context, Stage
 from prismdoc.stages.cascade import (
     CascadeStage,
+    char_validity,
     get_scorer,
+    make_composite,
     register_scorer,
     text_length,
 )
@@ -49,8 +51,10 @@ __all__ = [
     "Stage",
     "TableExtractStage",
     "ValidateStage",
+    "char_validity",
     "get_rule",
     "get_scorer",
+    "make_composite",
     "register_rule",
     "register_scorer",
     "text_length",

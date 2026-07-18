@@ -13,7 +13,13 @@ from prismdoc.pipeline import Pipeline
 from prismdoc.resilience import with_retry
 from prismdoc.schema import FieldSpec, TargetSchema
 from prismdoc.stages.base import Context, Stage
-from prismdoc.stages.cascade import CascadeStage, get_scorer, register_scorer
+from prismdoc.stages.cascade import (
+    CascadeStage,
+    char_validity,
+    get_scorer,
+    make_composite,
+    register_scorer,
+)
 from prismdoc.stages.confidence import ConfidenceStage
 from prismdoc.stages.extract import ExtractStage, LLMClient
 from prismdoc.stages.figures import (
@@ -71,11 +77,13 @@ __all__ = [
     "UnreadableDocumentError",
     "ValidateStage",
     "build_pipeline",
+    "char_validity",
     "cli_main",
     "estimate_cost",
     "get_rule",
     "get_scorer",
     "load_pipeline",
+    "make_composite",
     "record_cost",
     "register_rule",
     "register_scorer",

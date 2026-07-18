@@ -14,7 +14,11 @@ from prismdoc.schema import FieldSpec, TargetSchema
 from prismdoc.stages.base import Context, Stage
 from prismdoc.stages.cascade import (
     CascadeStage,
+    Scorer,
+    field_coverage_for,
     get_scorer,
+    grounding_ratio_for,
+    make_composite,
     required_fill_ratio_for,
 )
 
@@ -90,7 +94,7 @@ def _build_cascade_stage(
             )
     primary_key = params["primary"]
     fallback_key = params["fallback"]
-    scorer_name = params["scorer"]
+    scorer_cfg = params["scorer"]
     if not isinstance(primary_key, str):
         raise ValueError(
             f"Pipeline item[{index}] cascade.primary must be a string, "
@@ -101,25 +105,82 @@ def _build_cascade_stage(
             f"Pipeline item[{index}] cascade.fallback must be a string, "
             f"got {type(fallback_key).__name__}"
         )
-    if not isinstance(scorer_name, str):
-        raise ValueError(
-            f"Pipeline item[{index}] cascade.scorer must be a string, "
-            f"got {type(scorer_name).__name__}"
-        )
 
     primary = _instantiate_stage(primary_key, {}, target_schema)
     fallback = _instantiate_stage(fallback_key, {}, target_schema)
-
-    if scorer_name == "required_fill_ratio":
-        scorer = required_fill_ratio_for(target_schema)
-    else:
-        scorer = get_scorer(scorer_name)
+    scorer = _resolve_cascade_scorer(scorer_cfg, target_schema, index)
 
     return CascadeStage(
         primary=primary,
         fallback=fallback,
         scorer=scorer,
         threshold=float(params["threshold"]),
+    )
+
+
+def _resolve_named_scorer(name: str, target_schema: TargetSchema) -> Scorer:
+    """Resolve a scorer name, injecting schema for schema-dependent factories."""
+    if name == "required_fill_ratio":
+        return required_fill_ratio_for(target_schema)
+    if name == "field_coverage":
+        return field_coverage_for(target_schema)
+    if name in ("grounding", "grounding_ratio"):
+        return grounding_ratio_for(target_schema)
+    return get_scorer(name)
+
+
+def _resolve_cascade_scorer(
+    scorer_cfg: Any,
+    target_schema: TargetSchema,
+    index: int,
+) -> Scorer:
+    """Build a cascade scorer from a string name or composite mapping."""
+    if isinstance(scorer_cfg, str):
+        return _resolve_named_scorer(scorer_cfg, target_schema)
+
+    if isinstance(scorer_cfg, dict):
+        if "composite" not in scorer_cfg or len(scorer_cfg) != 1:
+            raise ValueError(
+                f"Pipeline item[{index}] cascade.scorer mapping must be "
+                f"{{composite: [...]}}, got keys {sorted(scorer_cfg)!r}"
+            )
+        components_cfg = scorer_cfg["composite"]
+        if not isinstance(components_cfg, list) or not components_cfg:
+            raise ValueError(
+                f"Pipeline item[{index}] cascade.scorer.composite must be "
+                f"a non-empty list"
+            )
+        components: list[dict[str, Any]] = []
+        for comp_index, item in enumerate(components_cfg):
+            if not isinstance(item, dict):
+                raise ValueError(
+                    f"Pipeline item[{index}] cascade.scorer.composite"
+                    f"[{comp_index}] must be a mapping"
+                )
+            if "scorer" not in item or "weight" not in item:
+                raise ValueError(
+                    f"Pipeline item[{index}] cascade.scorer.composite"
+                    f"[{comp_index}] must have 'scorer' and 'weight'"
+                )
+            raw = item["scorer"]
+            if isinstance(raw, str):
+                resolved: Scorer | str = _resolve_named_scorer(raw, target_schema)
+            elif callable(raw):
+                resolved = raw
+            else:
+                raise ValueError(
+                    f"Pipeline item[{index}] cascade.scorer.composite"
+                    f"[{comp_index}].scorer must be a string name, "
+                    f"got {type(raw).__name__}"
+                )
+            components.append(
+                {"scorer": resolved, "weight": float(item["weight"])}
+            )
+        return make_composite(components)
+
+    raise ValueError(
+        f"Pipeline item[{index}] cascade.scorer must be a string or "
+        f"{{composite: [...]}} mapping, got {type(scorer_cfg).__name__}"
     )
 
 

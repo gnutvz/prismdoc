@@ -15,13 +15,21 @@ from prismdoc import (
     TargetSchema,
     ValidateStage,
     build_pipeline,
+    char_validity,
     get_scorer,
     load_pipeline,
+    make_composite,
     register_scorer,
 )
 from prismdoc.schema import FieldSpec
 from prismdoc.stages.base import Stage
-from prismdoc.stages.cascade import required_fill_ratio_for, text_length
+from prismdoc.stages.cascade import (
+    field_coverage_for,
+    grounding_ratio_for,
+    required_fill_ratio_for,
+    text_length,
+    text_sufficiency,
+)
 from prismdoc.stages.parse import PassthroughParser
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -273,4 +281,196 @@ def test_cascade_exports_from_prismdoc() -> None:
     assert prismdoc.CascadeStage is CascadeStage
     assert callable(prismdoc.register_scorer)
     assert callable(prismdoc.get_scorer)
+    assert prismdoc.char_validity is char_validity
+    assert prismdoc.make_composite is make_composite
     register_scorer("text_length", text_length)  # idempotent re-register
+
+
+def test_char_validity_high_for_clean_text_low_for_garbage() -> None:
+    clean = _doc(parsed="Total: 42.50 USD  Vendor: ACME Corp")
+    garbage = _doc(parsed="@#%^&*<>{}[] " * 160)  # ~2000 chars of symbol soup
+    assert char_validity(clean) > 0.6
+    assert char_validity(garbage) < 0.2
+    # Length alone would clear a typical cascade threshold; validity does not.
+    assert text_length(garbage) > 20.0
+    assert get_scorer("char_validity")(garbage) == char_validity(garbage)
+
+
+def test_char_validity_empty_is_zero() -> None:
+    assert char_validity(_doc(parsed="")) == 0.0
+    assert char_validity(_doc(parsed="   \n\t  ")) == 0.0
+
+
+def test_char_validity_composite_garbage_scores_below_clean() -> None:
+    """Long symbol garbage must score lower than short clean under composite."""
+    clean = _doc(parsed="Total: 42.50 USD  Vendor: ACME Corp")
+    garbage = _doc(parsed="@#%^&*<>{}[] " * 160)
+    composite = make_composite(
+        [
+            {"scorer": "char_validity", "weight": 0.6},
+            {"scorer": "text_sufficiency", "weight": 0.4},
+        ]
+    )
+    clean_score = composite(clean)
+    garbage_score = composite(garbage)
+    assert garbage_score < clean_score
+    assert garbage_score < 0.5
+
+
+def test_text_sufficiency_bounds() -> None:
+    assert text_sufficiency(_doc(parsed="")) == 0.0
+    assert text_sufficiency(_doc(parsed="x" * 200)) == 1.0
+    assert text_sufficiency(_doc(parsed="x" * 100)) == 0.5
+    assert text_sufficiency(_doc(parsed="x" * 400)) == 1.0
+    assert get_scorer("text_sufficiency")(_doc(parsed="a" * 50)) == 0.25
+
+
+def test_field_coverage_for_averages_non_empty_schema_fields() -> None:
+    schema = TargetSchema(
+        fields=[
+            FieldSpec(name="name"),
+            FieldSpec(name="sku"),
+        ]
+    )
+    scorer = field_coverage_for(schema)
+    doc = _doc()
+    assert scorer(doc) == 0.0
+    doc.records = [
+        Record(fields={"name": "A", "sku": ""}),  # 0.5
+        Record(fields={"name": "B", "sku": "1"}),  # 1.0
+    ]
+    assert scorer(doc) == 0.75
+
+
+def test_grounding_ratio_for_averages_grounded_extracted_values() -> None:
+    schema = TargetSchema(
+        fields=[
+            FieldSpec(name="vendor"),
+            FieldSpec(name="total"),
+        ]
+    )
+    scorer = grounding_ratio_for(schema)
+    doc = _doc(parsed="Vendor ACME paid total 12.50")
+    assert scorer(doc) == 0.0
+    doc.records = [
+        # both extracted values grounded -> 1.0
+        Record(fields={"vendor": "ACME", "total": "12.50"}),
+        # one grounded, one hallucinated -> 0.5
+        Record(fields={"vendor": "ACME", "total": "999.99"}),
+    ]
+    assert scorer(doc) == 0.75
+
+
+def test_make_composite_weighted_combination_and_registry_resolve() -> None:
+    def always_half(_doc: Document) -> float:
+        return 0.5
+
+    composite = make_composite(
+        [
+            {"scorer": "char_validity", "weight": 1.0},
+            {"scorer": always_half, "weight": 1.0},
+        ]
+    )
+    # Weights 1+1 normalized to 0.5 each; alnum ratio ~0.85 -> ~0.675
+    score = composite(_doc(parsed="Hello world, total $10."))
+    assert 0.65 < score < 0.75
+
+    # Uneven weights: 3:1 toward always_half -> closer to 0.5
+    skewed = make_composite(
+        [
+            {"scorer": always_half, "weight": 3.0},
+            {"scorer": "text_sufficiency", "weight": 1.0},
+        ]
+    )
+    # text_sufficiency("x"*200) = 1.0; weighted = 0.5*0.75 + 1.0*0.25 = 0.625
+    assert skewed(_doc(parsed="x" * 200)) == 0.625
+
+
+def test_make_composite_skips_erroring_component_and_renormalizes() -> None:
+    def boom(_doc: Document) -> float:
+        raise RuntimeError("scorer failed")
+
+    composite = make_composite(
+        [
+            {"scorer": boom, "weight": 9.0},
+            {"scorer": "text_sufficiency", "weight": 1.0},
+        ]
+    )
+    assert composite(_doc(parsed="x" * 200)) == 1.0
+
+
+def test_cascade_composite_escalates_long_garbage_unlike_length_only() -> None:
+    garbage = "§¶†‡•‰™¡¿¤¢£¥€" * 80  # long OCR junk (no valid alnum/punct)
+    assert text_length(_doc(parsed=garbage)) > 200.0
+    assert char_validity(_doc(parsed=garbage)) < 0.05
+
+    primary = _TagStage("primary", parsed=garbage)
+    fallback = _TagStage("fallback", parsed="recovered clean text " * 20)
+    composite = make_composite(
+        [
+            {"scorer": "char_validity", "weight": 0.7},
+            {"scorer": "text_sufficiency", "weight": 0.3},
+        ]
+    )
+    # composite score dominated by low char_validity despite long text
+    assert composite(_doc(parsed=garbage)) < 0.5
+
+    length_stage = CascadeStage(
+        primary=_TagStage("p-len", parsed=garbage),
+        fallback=_TagStage("f-len"),
+        scorer=text_length,
+        threshold=200.0,
+    )
+    length_result = length_stage.run(_doc(), Context())
+    assert length_result.artifacts["router"][0]["tier"] == "primary"
+
+    quality_stage = CascadeStage(
+        primary=primary,
+        fallback=fallback,
+        scorer=composite,
+        threshold=0.5,
+    )
+    result = quality_stage.run(_doc(), Context())
+    assert primary.calls == 1
+    assert fallback.calls == 1
+    assert result.artifacts["tag"] == "fallback"
+    assert result.artifacts["router"][0]["tier"] == "fallback"
+
+
+def test_build_pipeline_cascade_composite_scorer_with_schema_component() -> None:
+    config = {
+        "schema": {
+            "fields": [
+                {"name": "name", "type": "string"},
+                {"name": "sku", "type": "string"},
+            ]
+        },
+        "pipeline": [
+            {
+                "cascade": {
+                    "primary": "validate.default",
+                    "fallback": "validate.default",
+                    "scorer": {
+                        "composite": [
+                            {"scorer": "field_coverage", "weight": 0.5},
+                            {"scorer": "char_validity", "weight": 0.5},
+                        ]
+                    },
+                    "threshold": 0.5,
+                }
+            }
+        ],
+    }
+    pipeline, _ctx = build_pipeline(config)
+    cascade = pipeline.stages[0]
+    assert isinstance(cascade, CascadeStage)
+
+    doc = _doc(parsed="Vendor ACME sku ABC-1")
+    doc.records = [Record(fields={"name": "ACME", "sku": "ABC-1"})]
+    # field_coverage=1.0, char_validity~1.0 -> composite near 1.0
+    assert cascade.scorer(doc) > 0.9
+
+    sparse = _doc(parsed="§¶†‡•‰™¡¿¤¢£¥" * 20)
+    sparse.records = [Record(fields={"name": "", "sku": ""})]
+    # field_coverage=0.0, char_validity~0 -> composite near 0
+    assert cascade.scorer(sparse) < 0.3
