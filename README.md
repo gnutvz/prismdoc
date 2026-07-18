@@ -286,11 +286,22 @@ Done (v0.3.0):
 - [x] LLM resilience (timeout + retry/backoff)
 - [x] Public SROIE benchmark: OCR-recall, multi-model extraction, cost/accuracy frontier
 
+Done (v0.4.0) — reliability & auditability:
+
+- [x] Confidence calibration map (measured on SROIE; `ConfidenceStage(calibration=...)`)
+- [x] Business-rule / cross-field validation (`subtotal + tax = total`, in-set, range…)
+- [x] Field provenance (page / bbox / source text per field)
+- [x] Adaptive field retry (re-prompt only the failed fields)
+- [x] Composite cascade scorer (char-validity + coverage + grounding, not just length)
+- [x] Observability signals (per-stage latency, escalation/violation rates, tokens, cost)
+- [x] Long-document chunking (chunk → extract → merge/dedup)
+- [x] Model ensemble + disagreement flags
+
 Next (still in-scope for a focused workflow service):
 
 - [ ] More parser/extractor engines behind the existing interfaces
-- [ ] Richer scorers for the cascade (quality signals beyond text length)
-- [ ] Scale the benchmark (larger n) + calibrate confidence against measured accuracy
+- [ ] Scale the benchmark further + per-provider cost/accuracy frontier
+- [ ] Merge per-chunk / per-model cost ledgers back into the parent document
 
 Out of scope by design — see [Scope](#scope-a-focused-microservice-not-a-platform); these belong to
 whoever deploys prismdoc: async job queues, persistence/resume, multi-tenancy, review dashboards,

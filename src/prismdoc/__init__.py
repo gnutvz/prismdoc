@@ -41,7 +41,7 @@ from prismdoc.stages.rules import RuleValidateStage, get_rule, register_rule
 from prismdoc.stages.table_extract import TableExtractStage
 from prismdoc.stages.validate import ValidateStage
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 __all__ = [
     "Block",
