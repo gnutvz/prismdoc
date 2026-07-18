@@ -9,6 +9,7 @@ from prismdoc.stages.cascade import (
     register_scorer,
     text_length,
 )
+from prismdoc.stages.chunked_extract import ChunkedExtractStage, chunk_text
 from prismdoc.stages.confidence import ConfidenceStage
 from prismdoc.stages.extract import ExtractStage, LLMClient, LiteLLMClient
 from prismdoc.stages.figures import (
@@ -29,6 +30,7 @@ from prismdoc.stages.validate import ValidateStage
 
 __all__ = [
     "CascadeStage",
+    "ChunkedExtractStage",
     "ConfidenceStage",
     "Context",
     "ExtractStage",
@@ -52,6 +54,7 @@ __all__ = [
     "TableExtractStage",
     "ValidateStage",
     "char_validity",
+    "chunk_text",
     "get_rule",
     "get_scorer",
     "make_composite",

@@ -21,6 +21,7 @@ from prismdoc.stages.cascade import (
     make_composite,
     register_scorer,
 )
+from prismdoc.stages.chunked_extract import ChunkedExtractStage, chunk_text
 from prismdoc.stages.confidence import ConfidenceStage
 from prismdoc.stages.extract import ExtractStage, LLMClient
 from prismdoc.stages.figures import (
@@ -45,6 +46,7 @@ __all__ = [
     "Block",
     "BudgetExceededError",
     "CascadeStage",
+    "ChunkedExtractStage",
     "ConfidenceStage",
     "Context",
     "CostLedger",
@@ -80,6 +82,7 @@ __all__ = [
     "aggregate_metrics",
     "build_pipeline",
     "char_validity",
+    "chunk_text",
     "cli_main",
     "document_metrics",
     "estimate_cost",

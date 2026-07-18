@@ -237,6 +237,7 @@ def _resolve_pipeline_item(
 def _ensure_plugins() -> None:
     """Re-register default stage factories (safe after ``registry.clear()``)."""
     from prismdoc.stages.cascade import register_plugins as register_cascade
+    from prismdoc.stages.chunked_extract import register_plugins as register_chunked
     from prismdoc.stages.confidence import register_plugins as register_confidence
     from prismdoc.stages.extract import register_plugins as register_extract
     from prismdoc.stages.figures import register_plugins as register_figures
@@ -252,6 +253,7 @@ def _ensure_plugins() -> None:
     register_parse()
     register_figures()
     register_extract()
+    register_chunked()
     register_table_extract()
     register_validate()
     register_normalize()
