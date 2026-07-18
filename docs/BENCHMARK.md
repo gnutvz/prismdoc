@@ -174,5 +174,31 @@ opus ≈ $15/$75 per 1M.
   instead of paying for the strong model on every document.
 
 **Caveats:** n = 200 (preliminary, ±0.05); costs are estimated at reference API prices; grounding
-is a heuristic escalation signal (not calibrated). Reproduce with `prismdoc.eval.sweep` on a cascade
-config once a hosted model is wired.
+is a heuristic escalation signal. Reproduce with `prismdoc.eval.sweep` on a cascade config once a
+hosted model is wired.
+
+## Confidence calibration
+
+The per-field confidence is a **heuristic** (grounded → 0.9, ungrounded → 0.4, missing → 0.0). Is it
+calibrated — i.e. are the `0.9` fields actually right ~90% of the time? Measured on the same 200
+receipts (632 field predictions from the cheap model, correctness by `values_match` vs ground truth):
+
+![Confidence calibration](img/calibration.png)
+
+| raw confidence | label | n | **empirical accuracy** |
+|----------------|-------|---|------------------------|
+| 0.90 | grounded | 534 | **0.830** |
+| 0.40 | ungrounded | 96 | **0.656** |
+| 0.00 | missing | 2 | 0.000 |
+
+**Expected Calibration Error ≈ 0.098.** Two honest findings:
+
+- **`0.9` (grounded) is right ~83%, not 90%** — slightly over-confident.
+- **`0.4` (ungrounded) is right ~66%, not 40%** — the heuristic is far too *pessimistic* here. A value
+  that isn't found verbatim in the OCR text is often still correct (the model reformats / normalizes a
+  value that is semantically present). "Ungrounded" ≠ "wrong".
+
+So the raw heuristic should not be read as a probability. The measured **calibration map** for this
+dataset is `{0.0: 0.00, 0.4: 0.66, 0.9: 0.83}` — apply it (via `ConfidenceStage(calibration=...)`) to
+turn the heuristic into calibrated confidence. Calibration is **dataset-specific**: measure it on your
+own labeled sample rather than hardcoding these numbers.

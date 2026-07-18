@@ -4,9 +4,11 @@ Confidence is driven by value presence, type-coercibility, and grounding (whethe
 extracted value appears in the document source text). Grounding is the primary signal
 for catching hallucinated values.
 
-This is **not** a calibrated probability. Proper calibration requires a labeled
-validation set (see the eval harness) and is future work. Stronger signals such as
-model logprobs or self-consistency are also deferred.
+Scores are a transparent heuristic, not calibrated probabilities by default. Deployers
+may pass a dataset-specific ``calibration`` map (raw → measured accuracy) measured on
+their own labeled sample — see ``docs/BENCHMARK.md`` "Confidence calibration". The
+SROIE map there is an example, not a hardcoded default. Stronger signals such as model
+logprobs or self-consistency are deferred.
 """
 
 from __future__ import annotations
@@ -29,15 +31,24 @@ _CONF_GROUNDED = 0.9
 class ConfidenceStage(Stage):
     """Attach per-field confidence via presence, type-coercibility, and grounding.
 
-    Scores are a transparent heuristic in [0, 1], not calibrated probabilities.
-    Grounding (value found in source text) is the main check against hallucinations.
+    Scores are a transparent heuristic in [0, 1]. Optional ``calibration`` remaps raw
+    discrete scores (``0.0`` / ``0.3`` / ``0.4`` / ``0.9``) to measured accuracies;
+    measure that map on the deployer's own labeled sample (dataset-specific). The
+    SROIE map in the benchmark docs is an example, not a default. Grounding (value
+    found in source text) is the main check against hallucinations.
     """
 
     name = "confidence"
 
-    def __init__(self, schema: TargetSchema, threshold: float = 0.5) -> None:
+    def __init__(
+        self,
+        schema: TargetSchema,
+        threshold: float = 0.5,
+        calibration: dict[float, float] | None = None,
+    ) -> None:
         self.schema = schema
         self.threshold = threshold
+        self.calibration = calibration
 
     def run(self, doc: Document, ctx: Context) -> Document:
         doc_text = doc.artifacts.get("parsed_markdown") or doc.full_text
@@ -47,8 +58,12 @@ class ConfidenceStage(Stage):
 
         for index, record in enumerate(doc.records):
             for spec in self.schema.fields:
+                preset = spec.name in record.confidence
                 score, reason = _field_confidence(record, spec, doc_text)
-                record.confidence[spec.name] = score
+                if not preset:
+                    if self.calibration is not None:
+                        score = self.calibration.get(round(score, 3), score)
+                    record.confidence[spec.name] = score
                 if score < self.threshold:
                     entry: dict[str, Any] = {
                         "record": index,

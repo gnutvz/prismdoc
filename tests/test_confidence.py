@@ -307,3 +307,111 @@ def test_confidence_yaml_stage_and_exports() -> None:
     assert isinstance(conf, ConfidenceStage)
     assert conf.threshold == 0.8
     assert conf.schema.field_names() == ctx.target_schema.field_names()
+
+
+_SROIE_CALIBRATION = {0.9: 0.83, 0.4: 0.66, 0.0: 0.0}
+
+
+def test_calibration_remaps_grounded_and_ungrounded() -> None:
+    doc = _doc_with_text(
+        {"name": "Widget", "sku": "W-1", "price": 12.5, "qty": 3},
+        "Catalog lists Widget and W-1 only",
+    )
+    result = ConfidenceStage(
+        schema=_schema(), calibration=_SROIE_CALIBRATION
+    ).run(doc, Context())
+
+    assert result.records[0].confidence["name"] == 0.83
+    assert result.records[0].confidence["sku"] == 0.83
+    assert result.records[0].confidence["price"] == 0.66
+    assert result.records[0].confidence["qty"] == 0.66
+
+
+def test_calibration_leaves_unmapped_raw_unchanged() -> None:
+    """Raw 0.3 (type_mismatch) is not in the map → kept as 0.3."""
+    doc = _doc_with_text(
+        {"name": "Widget", "sku": "W-1", "price": 1.0, "qty": "abc"},
+        "Widget W-1 price 1.0 qty abc",
+    )
+    result = ConfidenceStage(
+        schema=_schema(), calibration=_SROIE_CALIBRATION
+    ).run(doc, Context())
+
+    assert result.records[0].confidence["qty"] == 0.3
+
+
+def test_low_confidence_uses_calibrated_score() -> None:
+    doc = _doc_with_text(
+        {"name": "Widget", "sku": "W-1", "price": 12.5, "qty": 3},
+        "Catalog lists Widget and W-1 only",
+    )
+    # Without calibration: raw 0.4 < 0.5 → flagged
+    raw = ConfidenceStage(schema=_schema(), threshold=0.5).run(
+        doc.model_copy(deep=True), Context()
+    )
+    assert {
+        "record": 0,
+        "field": "price",
+        "confidence": 0.4,
+        "reason": "ungrounded",
+    } in raw.artifacts["low_confidence"]
+
+    # With calibration: 0.4 → 0.66 >= 0.5 → not flagged
+    calibrated = ConfidenceStage(
+        schema=_schema(), threshold=0.5, calibration=_SROIE_CALIBRATION
+    ).run(doc, Context())
+    assert all(
+        entry["field"] != "price" for entry in calibrated.artifacts["low_confidence"]
+    )
+    assert all(
+        entry["field"] != "qty" for entry in calibrated.artifacts["low_confidence"]
+    )
+    assert calibrated.records[0].confidence["price"] == 0.66
+
+
+def test_calibration_does_not_apply_to_preset_confidence() -> None:
+    doc = _doc_with_text(
+        {"name": "Widget", "sku": "W-1", "price": 1.0, "qty": 2},
+        "Widget W-1 1.0 qty 2",
+        confidence={"price": 0.9},
+    )
+    result = ConfidenceStage(
+        schema=_schema(), calibration=_SROIE_CALIBRATION
+    ).run(doc, Context())
+
+    assert result.records[0].confidence["price"] == 0.9
+    assert result.records[0].confidence["name"] == 0.83
+
+
+def test_calibration_via_yaml_config() -> None:
+    register_confidence()
+    pipeline, _ctx = build_pipeline(
+        {
+            "schema": {
+                "fields": [
+                    {"name": "name", "type": "string", "required": True},
+                    {"name": "price", "type": "number"},
+                ]
+            },
+            "pipeline": [
+                {
+                    "confidence.default": {
+                        "threshold": 0.5,
+                        "calibration": {0.9: 0.83, 0.4: 0.66, 0.0: 0.0},
+                    }
+                },
+            ],
+        }
+    )
+    conf = pipeline.stages[0]
+    assert isinstance(conf, ConfidenceStage)
+    assert conf.calibration == {0.9: 0.83, 0.4: 0.66, 0.0: 0.0}
+
+    doc = _doc_with_text(
+        {"name": "Widget", "price": 99.0},
+        "Catalog lists Widget only",
+    )
+    result = conf.run(doc, Context())
+    assert result.records[0].confidence["name"] == 0.83
+    assert result.records[0].confidence["price"] == 0.66
+    assert all(entry["field"] != "price" for entry in result.artifacts["low_confidence"])
