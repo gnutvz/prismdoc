@@ -182,6 +182,7 @@ def _ensure_plugins() -> None:
     from prismdoc.stages.ingest import register_plugins as register_ingest
     from prismdoc.stages.normalize import register_plugins as register_normalize
     from prismdoc.stages.parse import register_plugins as register_parse
+    from prismdoc.stages.rules import register_plugins as register_rules
     from prismdoc.stages.table_extract import register_plugins as register_table_extract
     from prismdoc.stages.validate import register_plugins as register_validate
 
@@ -193,4 +194,5 @@ def _ensure_plugins() -> None:
     register_validate()
     register_normalize()
     register_confidence()
+    register_rules()
     register_cascade()

@@ -26,6 +26,7 @@ from prismdoc.stages.figures import (
 from prismdoc.stages.ingest import IngestStage, Loader
 from prismdoc.stages.normalize import NormalizeStage
 from prismdoc.stages.parse import ParseStage, Parser, PassthroughParser
+from prismdoc.stages.rules import RuleValidateStage, get_rule, register_rule
 from prismdoc.stages.table_extract import TableExtractStage
 from prismdoc.stages.validate import ValidateStage
 
@@ -57,6 +58,7 @@ __all__ = [
     "PassthroughParser",
     "Pipeline",
     "Record",
+    "RuleValidateStage",
     "Source",
     "Stage",
     "TableExtractStage",
@@ -66,9 +68,11 @@ __all__ = [
     "build_pipeline",
     "cli_main",
     "estimate_cost",
+    "get_rule",
     "get_scorer",
     "load_pipeline",
     "record_cost",
+    "register_rule",
     "register_scorer",
     "registry",
     "with_retry",
