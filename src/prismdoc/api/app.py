@@ -16,6 +16,7 @@ from prismdoc.config import load_pipeline
 from prismdoc.cost import CostLedger
 from prismdoc.errors import InputTooLargeError
 from prismdoc.models import Document, Source
+from prismdoc.observability import document_metrics
 from prismdoc.pipeline import Pipeline
 from prismdoc.stages.base import Context
 
@@ -120,6 +121,7 @@ async def extract(
                 for entry in doc.trace
             ],
             "cost": cost.model_dump() if isinstance(cost, CostLedger) else cost,
+            "metrics": document_metrics(doc),
         }
     finally:
         if tmp_path is not None:

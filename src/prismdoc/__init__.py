@@ -9,6 +9,7 @@ from prismdoc.config import build_pipeline, load_pipeline
 from prismdoc.cost import BudgetExceededError, CostLedger, estimate_cost, record_cost
 from prismdoc.errors import InputTooLargeError, UnreadableDocumentError
 from prismdoc.models import Block, Document, FieldProvenance, Page, Record, Source
+from prismdoc.observability import aggregate_metrics, document_metrics
 from prismdoc.pipeline import Pipeline
 from prismdoc.resilience import with_retry
 from prismdoc.schema import FieldSpec, TargetSchema
@@ -76,9 +77,11 @@ __all__ = [
     "TargetSchema",
     "UnreadableDocumentError",
     "ValidateStage",
+    "aggregate_metrics",
     "build_pipeline",
     "char_validity",
     "cli_main",
+    "document_metrics",
     "estimate_cost",
     "get_rule",
     "get_scorer",
