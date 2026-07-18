@@ -149,7 +149,7 @@ expensive model**. Here the cascade is `gemini-3-flash → claude-opus`, escalat
 cheap model's output is poorly **grounded** in the OCR text (a proxy for "the cheap answer is shaky").
 Both models were run once per receipt and the cascade simulated at several grounding thresholds.
 
-**n = 42 SROIE receipts.** Cost is **estimated** (hypothetical API prices — the CLI backends are
+**n = 200 SROIE receipts.** Cost is **estimated** (hypothetical API prices — the CLI backends are
 actually free via Claude Max / Cursor Pro): gemini-flash ≈ $0.10/$0.40 per 1M in/out,
 opus ≈ $15/$75 per 1M.
 
@@ -157,22 +157,22 @@ opus ≈ $15/$75 per 1M.
 
 | Escalation threshold | % escalated | accuracy | est. cost / batch |
 |----------------------|-------------|----------|-------------------|
-| 0.00 (cheap only)    | 0%          | 0.774    | $0.0037           |
-| 0.26                 | 5%          | 0.774    | $0.027            |
-| 0.51                 | 19%         | 0.780    | $0.091            |
-| 0.76                 | 60%         | 0.798    | $0.319            |
-| 1.01 (strong only)   | 100%        | **0.839**| $0.563            |
+| 0.00 (cheap only)    | 0%          | 0.795    | $0.017            |
+| 0.26                 | 2%          | 0.795    | $0.076            |
+| 0.51                 | 14%         | 0.802    | $0.365            |
+| 0.76                 | 50%         | 0.834    | $1.297            |
+| 1.01 (strong only)   | 100%        | **0.865**| $2.541            |
 
 **Reading the frontier:**
 
-- The cheap model alone (gemini-3-flash) already reaches **77.4%** at near-zero cost.
-- Sending **everything** to opus reaches **83.9%** — **+6.5 points** — but costs **~152×** more.
+- The cheap model alone (gemini-3-flash) already reaches **79.5%** at near-zero cost.
+- Sending **everything** to opus reaches **86.5%** — **+7 points** — but costs **~154×** more.
 - Grounding-based escalation is a real Pareto curve: accuracy rises monotonically as you escalate more.
-  Escalating just the **19%** lowest-grounding receipts buys most of the low-hanging gain; the last few
-  points cost the most. That gap is exactly the money the cost-aware cascade lets you *not* spend —
-  pick the threshold that fits your accuracy/cost budget instead of paying for the strong model on
-  every document.
+  Escalating just the **14%** lowest-grounding receipts buys the first easy gain; reaching the top costs
+  the most (50% escalation → 83.4% at $1.30; 100% → 86.5% at $2.54). That gap is exactly the money the
+  cost-aware cascade lets you *not* spend — pick the threshold that fits your accuracy/cost budget
+  instead of paying for the strong model on every document.
 
-**Caveats:** n = 42 (still preliminary, ±0.1); costs are estimated at reference API prices; grounding
+**Caveats:** n = 200 (preliminary, ±0.05); costs are estimated at reference API prices; grounding
 is a heuristic escalation signal (not calibrated). Reproduce with `prismdoc.eval.sweep` on a cascade
 config once a hosted model is wired.
