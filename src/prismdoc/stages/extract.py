@@ -288,7 +288,10 @@ def _parse_structured_records(raw: str) -> list[dict[str, Any]] | None:
 
 
 def _parse_records_json(raw: str) -> list[dict[str, Any]]:
-    """Parse a JSON array from LLM output; strip fences if present."""
+    """Parse a JSON array or single object from LLM output; strip fences if present.
+
+    A top-level object ``{field: value, ...}`` is treated as one record.
+    """
     candidates = _json_candidates(raw)
     last_error: Exception | None = None
     for candidate in candidates:
@@ -307,19 +310,22 @@ def _parse_records_json(raw: str) -> list[dict[str, Any]]:
                     )
                 records.append(item)
             return records
+        if isinstance(data, dict):
+            return [data]
         last_error = ValueError(
-            f"Extract stage expected a JSON array; got {type(data).__name__}"
+            f"Extract stage expected a JSON array or object; "
+            f"got {type(data).__name__}"
         )
 
     detail = f" ({last_error})" if last_error else ""
     raise ValueError(
-        "Extract stage could not parse a JSON array from LLM output"
+        "Extract stage could not parse a JSON array or object from LLM output"
         f"{detail}. Raw response (truncated): {raw[:500]!r}"
     )
 
 
 def _json_candidates(raw: str) -> list[str]:
-    """Yield likely JSON substrings: fenced blocks, then first array, then raw."""
+    """Yield likely JSON substrings: fenced blocks, then array/object, then raw."""
     text = raw.strip()
     out: list[str] = []
     for match in _FENCE_RE.finditer(text):
@@ -328,6 +334,10 @@ def _json_candidates(raw: str) -> list[str]:
     end = text.rfind("]")
     if start != -1 and end != -1 and end > start:
         out.append(text[start : end + 1])
+    obj_start = text.find("{")
+    obj_end = text.rfind("}")
+    if obj_start != -1 and obj_end != -1 and obj_end > obj_start:
+        out.append(text[obj_start : obj_end + 1])
     out.append(text)
     # Preserve order, drop duplicates
     seen: set[str] = set()

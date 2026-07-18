@@ -127,7 +127,7 @@ def test_extract_unparseable_raises_clear_error() -> None:
         source=Source(path="/tmp/catalog.md"),
         pages=[Page(index=0, text="noise")],
     )
-    with pytest.raises(ValueError, match=r"could not parse a JSON array"):
+    with pytest.raises(ValueError, match=r"could not parse a JSON array or object"):
         ExtractStage(
             schema=_product_schema(),
             client=FakeLLMClient("sorry, I cannot help with that"),
