@@ -18,8 +18,6 @@ sub-pipeline, and three ways to run it (library, CLI, microservice).
 
 ![Architecture](docs/img/architecture.png)
 
----
-
 ## Why prismdoc
 
 - **Cost-aware by design.** A cheap tier runs first; prismdoc escalates to a stronger, pricier tier
@@ -30,6 +28,47 @@ sub-pipeline, and three ways to run it (library, CLI, microservice).
 - **Pluggable & declarative.** Every step is a `Stage` resolved from a registry; whole pipelines are
   declared in YAML. Swap an engine without touching code.
 - **Runs three ways.** Python library, `prismdoc` CLI, or a FastAPI + Docker microservice.
+
+---
+
+## Proof it works
+
+Two claims, both measured on **public datasets with real ground truth** — not synthetic self-tests.
+Full methodology, numbers, and caveats in **[docs/BENCHMARK.md](docs/BENCHMARK.md)**.
+
+### 1. The cost-aware cascade captures most of the accuracy for a fraction of the cost
+
+A cheap model (`gemini-3-flash`) runs first; only the hard, low-grounding cases escalate to a strong
+model (`claude-opus`), on public scanned receipts (**SROIE**).
+
+![Cost-aware cascade frontier](docs/img/frontier.png)
+
+- The cheap model **alone** already gets most of the way, at near-zero cost.
+- Sending **everything** to the strong model adds only a few accuracy points — at **~150× the cost**.
+- The cascade buys the intermediate points: escalate just the shakiest cases and capture most of the
+  gain for a fraction of the spend. That gap is the money the routing saves.
+
+### 2. On mixed-modality documents, the figure→VLM path recovers what text alone can't
+
+On a document that mixes text with charts and diagrams, text-only extraction is blind to figures and
+whole-page VLM is costly/inconsistent. prismdoc **routes**: text→text, each figure→VLM, then merges the
+result back at the placeholder.
+
+Measured on **InfographicVQA** (validation, 200 distinct infographics with ground truth): answering from
+the **OCR text alone scores 35.5%**, but the **figure→VLM path scores 84.5%** — a **+49.0-point** gap
+(stable at +47.5 to +49.0 across n=40, 80, and 200) that only the visual route recovers.
+
+![Text-only vs figure→VLM path](docs/img/mixed_modality.png)
+
+See **[docs/mixed-modality.md](docs/mixed-modality.md)** for the benchmark (reproduce with
+`python -m prismdoc.bench.infovqa`) and a real case study — a paper whose embedded infographic holds data
+(`Canada Post 53,000, UPS 12,000…`) that text-only drops and the composed pipeline recovers.
+
+Also benchmarked in [docs/BENCHMARK.md](docs/BENCHMARK.md): OCR-recall of the parse layer, end-to-end
+extraction accuracy across four model providers (Claude / GPT / Gemini / Grok), and confidence
+calibration. Numbers are honestly caveated (sample size, estimated prices, heuristic escalation signal).
+
+---
 
 ## Key features
 
@@ -43,7 +82,7 @@ sub-pipeline, and three ways to run it (library, CLI, microservice).
 | **Validate + Normalize** | Required-field checks, type coercion, whitespace/dedup cleanup |
 | **Confidence per field** | Per-field confidence + low-confidence flags in the output |
 | **Cost ledger** | Real per-stage token/USD accounting + optional per-request budget |
-| **Eval harness** | Per-field accuracy vs ground truth (`prismdoc-eval`) |
+| **Eval + benchmarks** | Per-field accuracy vs ground truth; public SROIE + InfographicVQA benchmarks |
 | **LLM resilience** | Timeout + retry/backoff around the model call |
 | **Graceful errors** | Encrypted/corrupt documents fail with a clear typed error |
 | **Serving** | FastAPI `POST /extract` + `GET /health`, Dockerfile + compose |
@@ -69,227 +108,28 @@ composes with whatever queue/store/observability stack you already run.
 
 ---
 
-## Install
+## Get started
+
+The offline path needs no API key. In three lines:
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e .                 # core
-pip install -e ".[dev]"          # + tests/lint
-pip install -e ".[docling]"      # + OCR fallback (Docling/RapidOCR)
-pip install -e ".[llm]"          # + LLM extraction (litellm; Bedrock/OpenAI/local)
-pip install -e ".[api]"          # + FastAPI serving
-```
-
-## Quickstart (fully offline, no API key)
-
-Structured extraction on a retail spreadsheet, end to end:
-
-```bash
+pip install -e .
 python examples/retail/make_sample.py
-python -m prismdoc.cli \
-  --config examples/retail/demo.yaml \
-  --input examples/retail/sample_catalog.xlsx \
-  --csv out.csv
+python -m prismdoc.cli --config examples/retail/demo.yaml \
+  --input examples/retail/sample_catalog.xlsx --csv out.csv
 ```
 
-```
-records: 5   |   validation: valid=5 invalid=0 errors=0
-name                   | sku      | price | currency | unit   | brand       | category
------------------------+----------+-------+----------+--------+-------------+----------
-Arabica Coffee Beans   | SKU-1001 | 12.5  | USD      | kg     | Acme        | Beverages
-...
-```
+Full setup, YAML configuration, running as a service, and the dev/eval/benchmark commands are in
+**[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)**.
 
 ---
-
-## The cost-aware cascade
-
-![Cascade](docs/img/cascade.png)
-
-Run the cheap tier, score the result, and escalate **only** if it's below your threshold. The decision
-and score are recorded on the document (`artifacts["router"]`) so you can see where money was spent.
-
-Declared in YAML:
-
-```yaml
-pipeline:
-  - ingest.default
-  - cascade:
-      primary:  parse.passthrough   # cheap, free
-      fallback: parse.docling       # stronger, costs compute
-      scorer:   text_length
-      threshold: 20
-  - extract.table
-  - validate.default
-  - normalize.default
-```
-
-Real behaviour (offline, from `examples/retail/pipeline_cascade.yaml`):
-
-| Input | Cheap tier score | Decision |
-|---|---|---|
-| Text invoice (PDF) | 2074 | `tier=primary` — passthrough is enough, **no OCR spent** |
-| Scanned receipt (JPG) | 9 | `tier=fallback` — escalates to **Docling OCR** |
-
-The same pattern applies to extraction (cheap model → strong model) via injectable LLM clients.
-
-## Benchmarks
-
-Real evidence on public scanned receipts (**SROIE**), not synthetic self-tests — see
-**[docs/BENCHMARK.md](docs/BENCHMARK.md)** for full methodology, numbers, and caveats.
-
-**Cost-aware cascade frontier** — a cheap model (`gemini-3-flash`) with the hard, low-grounding cases
-escalated to a strong model (`claude-opus`):
-
-![Cost-aware cascade frontier](docs/img/frontier.png)
-
-- The cheap model **alone** already gets most of the way, at near-zero cost.
-- Sending **everything** to the strong model adds only a few accuracy points — at **~150× the cost**.
-- The cascade lets you buy the intermediate points: escalate just the shakiest cases and capture most
-  of the gain for a fraction of the spend. That gap is the money the cost-aware routing saves.
-
-Also benchmarked (in `docs/BENCHMARK.md`): OCR-recall of the parse layer, and end-to-end extraction
-accuracy across four model providers (Claude / GPT / Gemini / Grok). Numbers are preliminary and
-honestly caveated (sample size, estimated prices, heuristic escalation signal).
-
-## Figure / diagram sub-pipeline
-
-Documents with embedded images/diagrams are handled on a side path:
-
-```
-parse markdown:  "...text... [[FIGURE:fig_0_0]] ...text..."
-                              │
-   figures extracted ─────────┘   process (OCR / VLM / stub)   ──► merge result back
-                                                                    into the placeholder
-```
-
-Declared via `figures.extract → figures.process → figures.merge` (see
-`examples/retail/pipeline_figures.yaml`). The processor is pluggable — the default is an offline stub;
-an OCR/VLM processor slots in without changing the round-trip.
-
-This is where a composed pipeline beats any single tool: on a mixed-modality document (text + charts +
-diagrams), text-only extraction is blind to figures and whole-page VLM is costly/inconsistent — routing
-text→text and figure→VLM, then merging, gives the complete result.
-
-**Measured** on InfographicVQA (validation, 200 distinct infographics with ground truth): answering from
-the **OCR text alone scores 35.5%**, but the **figure→VLM path scores 84.5%** — a **+49.0-point** gap
-(stable at +47.5 to +49.0 across n=40, 80, and 200) that only the visual route recovers.
-
-![Text-only vs figure→VLM path](docs/img/mixed_modality.png)
-
-See **[docs/mixed-modality.md](docs/mixed-modality.md)** for the benchmark (reproduce with
-`python -m prismdoc.bench.infovqa`) and a real case study (a paper whose embedded infographic holds data
-— `Canada Post 53,000, UPS 12,000…` — that text-only drops and the composed pipeline recovers).
-
-## Structured extraction with an LLM
-
-The `extract.default` stage is schema-driven and provider-agnostic via
-[litellm](https://github.com/BerriAI/litellm). The LLM client is injectable, so the pipeline is fully
-testable offline with a mock; a live run needs `pip install prismdoc[llm]` and provider credentials.
-
-```yaml
-schema:
-  fields:
-    - {name: name, type: string, required: true}
-    - {name: price, type: number}
-pipeline:
-  - ingest.default
-  - parse.default
-  - extract.default: {model: "bedrock/anthropic.claude-3-5-sonnet-20240620-v1:0"}
-  - validate.default
-  - normalize.default
-```
-
-Set credentials via your provider's usual env vars (e.g. AWS creds/region for Bedrock, `OPENAI_API_KEY`
-for OpenAI).
-
-## Run as a service
-
-```bash
-pip install -e ".[api,llm]"
-uvicorn prismdoc.api.app:app --port 8000
-# or:
-docker compose up --build
-```
-
-```bash
-curl -F "file=@invoice.pdf" http://localhost:8000/extract
-curl http://localhost:8000/health
-```
-
----
-
-## Project layout
-
-```
-src/prismdoc/
-  models.py        # Document, Page, Block, Record, TraceEntry (Pydantic)
-  schema.py        # FieldSpec, TargetSchema
-  pipeline.py      # sequential runner + trace
-  registry.py      # plugin registry
-  config.py        # load_pipeline / build_pipeline (YAML)
-  cli.py           # `prismdoc` CLI
-  eval/            # offline per-field accuracy harness
-  stages/
-    ingest.py      # PDF / image / xlsx loaders
-    parse.py       # passthrough + Docling OCR
-    cascade.py     # cost-aware cascade + scorers
-    figures.py     # figure extract / process / merge
-    extract.py     # schema-driven LLM extraction (litellm)
-    validate.py    # schema validation + coercion
-    normalize.py   # cleanup + dedup
-    table_extract.py  # offline spreadsheet extractor
-  api/app.py       # FastAPI service
-examples/retail/   # sample generator + demo pipelines
-docs/              # PRD, tech spec, diagrams
-```
-
-## Development
-
-```bash
-pip install -e ".[dev]"
-pytest
-ruff check src tests
-```
-
-### Eval harness (offline)
-
-After generating the retail sample, the harness runs end-to-end against ground truth:
-
-```bash
-python examples/retail/make_sample.py
-python -m prismdoc.eval --dataset examples/eval/retail_dataset.json
-# or: prismdoc-eval --dataset examples/eval/retail_dataset.json
-```
-
-The retail dataset is a **smoke case**, not a quality claim: the table extractor reads a file
-produced by the same script that wrote the ground-truth rows — a tautology that proves the
-harness wiring works. Real-world accuracy (and the cost trade-off) is measured by the
-threshold-sweep frontier below, not by this smoke run.
-
-### Threshold sweep (accuracy vs USD frontier)
-
-Sweep cascade thresholds to emit the accuracy-vs-USD frontier. Requires a dataset whose
-`config_path` is a cascade pipeline (e.g. retarget `examples/eval/retail_dataset.json` at
-`examples/retail/pipeline_cascade.yaml`):
-
-```bash
-python -m prismdoc.eval.sweep \
-  --dataset path/to/cascade_dataset.json \
-  --thresholds 0,10,20,50,100 \
-  --out frontier.csv \
-  --plot frontier.png   # optional; needs pip install 'prismdoc[viz]'
-# or: prismdoc-sweep --dataset ... --thresholds ... --out frontier.csv
-```
-
-Writes `threshold,accuracy,total_usd,escalations` and prints a table. `--plot` is skipped
-cleanly when matplotlib is not installed.
 
 ## Known limitations (honest)
 
-- **Benchmark is one dataset, preliminary.** Numbers are SROIE receipts (n≈158), estimated cost. A
-  per-feature **ablation** (does each module actually lift accuracy / reduce review?) is not done yet —
-  the features are implemented and unit-tested, but their uplift on real data is unproven.
+- **Benchmarks are preliminary.** SROIE cascade numbers are n≈158 with estimated cost; the
+  InfographicVQA gap uses a relaxed match (not official ANLS). A per-feature **ablation** (does each
+  module lift accuracy / reduce review?) is not done yet — features are implemented and unit-tested, but
+  their uplift on real data is unproven.
 - **Provenance is reverse-located.** It finds each extracted value back in the parsed text
   (page/bbox/source) — best-effort, and can be ambiguous when the same value (e.g. `10.00`) appears in
   several places. It is not native OCR-token → field lineage.
@@ -326,6 +166,7 @@ Done (v0.4.0) — reliability & auditability:
 - [x] Observability signals (per-stage latency, escalation/violation rates, tokens, cost)
 - [x] Long-document chunking (chunk → extract → merge/dedup)
 - [x] Model ensemble + disagreement flags
+- [x] Mixed-modality benchmark (InfographicVQA: figure→VLM path, +49.0 pts over text-only)
 
 Next (still in-scope for a focused workflow service):
 
