@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+
+import pytest
 
 from prismdoc import (
     CascadeStage,
     Context,
+    CostLedger,
     Document,
+    ExtractStage,
+    LLMClient,
     Page,
     ParseStage,
     Record,
@@ -16,6 +22,7 @@ from prismdoc import (
     ValidateStage,
     build_pipeline,
     char_validity,
+    estimate_cost,
     get_scorer,
     load_pipeline,
     make_composite,
@@ -30,10 +37,58 @@ from prismdoc.stages.cascade import (
     text_length,
     text_sufficiency,
 )
+from prismdoc.stages.extract import Completion
 from prismdoc.stages.parse import PassthroughParser
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _CASCADE_YAML = _REPO_ROOT / "examples" / "retail" / "pipeline_cascade.yaml"
+
+_EXTRACT_CANNED = [{"name": "Widget", "sku": "W-1"}]
+
+
+class _UsageLLMClient(LLMClient):
+    """Fake client with fixed response text and token usage."""
+
+    def __init__(
+        self,
+        response: str,
+        *,
+        prompt_tokens: int,
+        completion_tokens: int,
+        model: str,
+    ) -> None:
+        self.response = response
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+        self.model = model
+
+    def complete(
+        self, prompt: str, *, response_format: dict | None = None
+    ) -> Completion:
+        return Completion(
+            text=self.response,
+            usage={
+                "prompt_tokens": self.prompt_tokens,
+                "completion_tokens": self.completion_tokens,
+            },
+            model=self.model,
+        )
+
+
+def _extract_schema() -> TargetSchema:
+    return TargetSchema(
+        fields=[
+            FieldSpec(name="name", type="string", required=True),
+            FieldSpec(name="sku", type="string", required=True),
+        ]
+    )
+
+
+def _always(score: float):
+    def _scorer(_doc: Document) -> float:
+        return score
+
+    return _scorer
 
 
 class _TagStage(Stage):
@@ -474,3 +529,152 @@ def test_build_pipeline_cascade_composite_scorer_with_schema_component() -> None
     sparse.records = [Record(fields={"name": "", "sku": ""})]
     # field_coverage=0.0, char_validity~0 -> composite near 0
     assert cascade.scorer(sparse) < 0.3
+
+
+# --- T-038: escalated cascade must keep primary + fallback cost ---
+
+
+def test_escalated_cascade_cost_is_primary_plus_fallback() -> None:
+    schema = _extract_schema()
+    primary_in, primary_out = 1000, 200
+    fallback_in, fallback_out = 2000, 400
+    primary_payload = json.dumps([{"name": "Cheap", "sku": "C-1"}])
+    fallback_payload = json.dumps([{"name": "Strong", "sku": "S-1"}])
+    primary = ExtractStage(
+        schema=schema,
+        client=_UsageLLMClient(
+            primary_payload,
+            prompt_tokens=primary_in,
+            completion_tokens=primary_out,
+            model="gpt-4o-mini",
+        ),
+        model="gpt-4o-mini",
+    )
+    fallback = ExtractStage(
+        schema=schema,
+        client=_UsageLLMClient(
+            fallback_payload,
+            prompt_tokens=fallback_in,
+            completion_tokens=fallback_out,
+            model="gpt-4o",
+        ),
+        model="gpt-4o",
+    )
+    primary_cost = estimate_cost("gpt-4o-mini", primary_in, primary_out)
+    fallback_cost = estimate_cost("gpt-4o", fallback_in, fallback_out)
+    assert primary_cost is not None and fallback_cost is not None
+
+    result = CascadeStage(
+        primary=primary,
+        fallback=fallback,
+        scorer=_always(0.0),
+        threshold=0.5,
+    ).run(_doc(text="Widget W-1 9.99"), Context())
+
+    cost = result.artifacts["cost"]
+    assert isinstance(cost, CostLedger)
+    assert cost.total_usd == pytest.approx(primary_cost + fallback_cost)
+    assert cost.tokens_in == primary_in + fallback_in
+    assert cost.tokens_out == primary_out + fallback_out
+    assert cost.by_stage["extract"].usd == pytest.approx(primary_cost + fallback_cost)
+    assert result.records[0].fields["name"] == "Strong"
+    assert result.artifacts["router"][0]["tier"] == "fallback"
+
+
+def test_non_escalated_cascade_cost_is_primary_only() -> None:
+    schema = _extract_schema()
+    primary_in, primary_out = 1000, 200
+    fallback_in, fallback_out = 2000, 400
+    primary = ExtractStage(
+        schema=schema,
+        client=_UsageLLMClient(
+            json.dumps(_EXTRACT_CANNED),
+            prompt_tokens=primary_in,
+            completion_tokens=primary_out,
+            model="gpt-4o-mini",
+        ),
+        model="gpt-4o-mini",
+    )
+    fallback = ExtractStage(
+        schema=schema,
+        client=_UsageLLMClient(
+            json.dumps([{"name": "Strong", "sku": "S-1"}]),
+            prompt_tokens=fallback_in,
+            completion_tokens=fallback_out,
+            model="gpt-4o",
+        ),
+        model="gpt-4o",
+    )
+    primary_cost = estimate_cost("gpt-4o-mini", primary_in, primary_out)
+    assert primary_cost is not None
+
+    result = CascadeStage(
+        primary=primary,
+        fallback=fallback,
+        scorer=_always(1.0),
+        threshold=0.5,
+    ).run(_doc(text="Widget W-1 9.99"), Context())
+
+    cost = result.artifacts["cost"]
+    assert isinstance(cost, CostLedger)
+    assert cost.total_usd == pytest.approx(primary_cost)
+    assert cost.tokens_in == primary_in
+    assert cost.tokens_out == primary_out
+    assert result.records[0].fields["name"] == "Widget"
+    assert result.artifacts["router"][0]["tier"] == "primary"
+
+
+def test_passthrough_primary_escalation_keeps_only_fallback_cost() -> None:
+    schema = _extract_schema()
+    fallback_in, fallback_out = 1500, 300
+    fallback_cost = estimate_cost("gpt-4o", fallback_in, fallback_out)
+    assert fallback_cost is not None
+
+    primary = ParseStage(parser=PassthroughParser())
+    fallback = ExtractStage(
+        schema=schema,
+        client=_UsageLLMClient(
+            json.dumps(_EXTRACT_CANNED),
+            prompt_tokens=fallback_in,
+            completion_tokens=fallback_out,
+            model="gpt-4o",
+        ),
+        model="gpt-4o",
+    )
+    result = CascadeStage(
+        primary=primary,
+        fallback=fallback,
+        scorer=_always(0.0),
+        threshold=0.5,
+    ).run(_doc(text="short"), Context())
+
+    cost = result.artifacts["cost"]
+    assert isinstance(cost, CostLedger)
+    assert cost.total_usd == pytest.approx(fallback_cost)
+    assert cost.tokens_in == fallback_in
+    assert cost.tokens_out == fallback_out
+    assert result.artifacts["router"][0]["tier"] == "fallback"
+
+
+def test_escalation_records_and_markdown_still_come_from_fallback() -> None:
+    primary = _TagStage(
+        "primary",
+        parsed="primary-markdown",
+        records=[Record(fields={"name": "from-primary"})],
+    )
+    fallback = _TagStage(
+        "fallback",
+        parsed="fallback-markdown",
+        records=[Record(fields={"name": "from-fallback"})],
+    )
+    result = CascadeStage(
+        primary=primary,
+        fallback=fallback,
+        scorer=_always(0.0),
+        threshold=0.5,
+    ).run(_doc(), Context())
+
+    assert result.artifacts["parsed_markdown"] == "fallback-markdown"
+    assert result.records[0].fields["name"] == "from-fallback"
+    assert result.artifacts["tag"] == "fallback"
+    assert "cost" not in result.artifacts

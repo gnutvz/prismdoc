@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
+from prismdoc.cost import CostLedger
 from prismdoc.matching import value_in_text
 from prismdoc.models import Document
 from prismdoc.schema import TargetSchema
@@ -210,7 +211,11 @@ class CascadeStage(Stage):
         primary_doc = self.primary.run(doc, ctx)
         score = float(self.scorer(primary_doc))
         if score < self.threshold:
+            # Primary was paid for even though we discard its other artifacts.
+            primary_cost = primary_doc.artifacts.get("cost")
             result = self.fallback.run(baseline, ctx)
+            if isinstance(primary_cost, CostLedger):
+                _merge_cost_ledger(result, primary_cost)
             tier = "fallback"
         else:
             result = primary_doc
@@ -227,6 +232,26 @@ class CascadeStage(Stage):
         else:
             result.artifacts["router"] = [entry]
         return result
+
+
+def _merge_cost_ledger(doc: Document, primary: CostLedger) -> None:
+    """Accumulate ``primary``'s per-stage entries into ``doc.artifacts["cost"]``."""
+    existing = doc.artifacts.get("cost")
+    if isinstance(existing, CostLedger):
+        ledger = existing
+    else:
+        ledger = CostLedger()
+        doc.artifacts["cost"] = ledger
+    for stage_name, stage_cost in primary.by_stage.items():
+        ledger.add(
+            stage_name,
+            stage_cost.model,
+            stage_cost.tokens_in,
+            stage_cost.tokens_out,
+            stage_cost.usd,
+            unpriced=stage_cost.unpriced,
+            unmetered=stage_cost.unmetered,
+        )
 
 
 def register_plugins() -> None:
