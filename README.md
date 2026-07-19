@@ -4,7 +4,7 @@
 
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Tests](https://img.shields.io/badge/tests-passing-brightgreen)
+[![CI](https://github.com/gnutvz/prismdoc/actions/workflows/ci.yml/badge.svg)](https://github.com/gnutvz/prismdoc/actions/workflows/ci.yml)
 ![Lint](https://img.shields.io/badge/lint-ruff-000000)
 
 prismdoc is an **orchestration layer** on top of existing extraction engines (OCR, layout, LLM/VLM).
