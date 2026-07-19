@@ -13,10 +13,14 @@ authors = [{ name = "prismdoc contributors" }]
 keywords = ["document-extraction", "ocr", "llm", "pipeline", "invoice", "receipt", "rag"]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: MIT License",
     "Topic :: Text Processing",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Intended Audience :: Developers",
 ]
+
 dependencies = [
     "pydantic>=2.0,<3",
     "pymupdf>=1.24",
@@ -24,6 +28,12 @@ dependencies = [
     "openpyxl>=3.1",
     "pyyaml>=6.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/gnutvz/prismdoc"
+Repository = "https://github.com/gnutvz/prismdoc"
+Changelog = "https://github.com/gnutvz/prismdoc/blob/main/CHANGELOG.md"
+Issues = "https://github.com/gnutvz/prismdoc/issues"
 
 [project.optional-dependencies]
 api = ["fastapi", "uvicorn[standard]", "python-multipart"]
