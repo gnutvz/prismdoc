@@ -68,6 +68,15 @@ Also benchmarked in [docs/BENCHMARK.md](docs/BENCHMARK.md): OCR-recall of the pa
 extraction accuracy across four model providers (Claude / GPT / Gemini / Grok), and confidence
 calibration. Numbers are honestly caveated (sample size, estimated prices, heuristic escalation signal).
 
+### 3. Which modules actually earn their keep — a per-module ablation
+
+We ablated five modules on **two domains** (receipts + invoices, real ground truth) against a
+cheap-model baseline. The result is deliberately unvarnished: cascade and ensemble help where there is
+headroom, repair is roughly neutral, the naïve deterministic tier **hurts** — and a bigger model is not
+always better. Full table and reasoning in **[docs/ABLATION.md](docs/ABLATION.md)**.
+
+![Per-module ablation](docs/img/ablation.png)
+
 ---
 
 ## Key features
@@ -127,9 +136,10 @@ Full setup, YAML configuration, running as a service, and the dev/eval/benchmark
 ## Known limitations (honest)
 
 - **Benchmarks are preliminary.** SROIE cascade numbers are n≈158 with estimated cost; the
-  InfographicVQA gap uses a relaxed match (not official ANLS). A per-feature **ablation** (does each
-  module lift accuracy / reduce review?) is not done yet — features are implemented and unit-tested, but
-  their uplift on real data is unproven.
+  InfographicVQA gap uses a relaxed match (not official ANLS). A per-module **ablation** across two
+  domains ([docs/ABLATION.md](docs/ABLATION.md)) is now done and is deliberately honest: cascade and
+  ensemble help (where there is headroom), repair is ~neutral, and the naïve deterministic **hybrid tier
+  actively hurts** (−27 to −33 points) — use it only with anchored regex, not the generic matchers.
 - **Provenance is reverse-located.** It finds each extracted value back in the parsed text
   (page/bbox/source) — best-effort, and can be ambiguous when the same value (e.g. `10.00`) appears in
   several places. It is not native OCR-token → field lineage.

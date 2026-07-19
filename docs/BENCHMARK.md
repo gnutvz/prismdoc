@@ -244,3 +244,15 @@ answers depend on chart values and spatial layout that raw text drops.
 coarse readout of the gap, not a leaderboard number. A single infographic is one image, so this isolates
 the **figure→VLM contribution**; the full route-and-merge on a multi-figure document is shown
 qualitatively in [mixed-modality.md](mixed-modality.md).
+
+## Per-module ablation (two domains)
+
+Does each module actually lift accuracy — across document types? We ablated five modules (hybrid, repair,
+ensemble, cascade, strong-model) on **SROIE receipts (n=60)** and **invoices (n=45)** against a
+cheap-model baseline, plus a rules-as-detector sub-study. The honest result: effects are domain-dependent,
+the naïve deterministic tier hurts, and a bigger model is not always better.
+
+![Per-module ablation](img/ablation.png)
+
+Full methodology, per-field breakdown, the rules-detection study, and honest caveats are in
+**[ABLATION.md](ABLATION.md)**.

@@ -16,6 +16,12 @@ while pre-1.0 (the public API may still change).
   separately. `rule_violations` now contains only rules that actually ran and failed.
 
 ### Added
+- **Per-module ablation across two domains** (`docs/ABLATION.md`) — measures the accuracy delta of each
+  module (hybrid, repair, ensemble, cascade, strong) on SROIE receipts (n=60) and invoices (n=45) vs a
+  cheap-model baseline, plus a rules-as-detector study. Deliberately honest findings: cascade/ensemble
+  help where there is headroom, repair is ~neutral, the naïve deterministic **hybrid tier hurts** (−27 to
+  −33 pts), a bigger model is not always better, and `sum_equals` is precise but only catches internal
+  inconsistency (0 recall on self-consistent misreads).
 - **Mixed-modality benchmark** (`prismdoc.bench.infovqa`) — quantifies the figure→VLM path on
   InfographicVQA (validation, 200 distinct infographics, real ground truth from Hugging Face). Answering
   from OCR text alone scores **35.5%**; the figure→VLM path scores **84.5%** — a **+49.0-point** gap,
