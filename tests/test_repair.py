@@ -138,6 +138,29 @@ def test_max_rounds_bounds_the_loop() -> None:
     assert len(result.artifacts["repair"]) == 2
 
 
+def test_repaired_low_confidence_field_not_re_repaired_next_round() -> None:
+    """Regression: the low_confidence artifact is a pre-repair snapshot and is
+    never recomputed. A low-confidence field repaired in round 1 must NOT be
+    re-selected via that stale list in round 2 (which would burn a second LLM
+    call on an already-fixed field and never let the loop terminate early)."""
+    doc = _doc(
+        {"name": "Widget", "sku": "W-1", "price": 99.0, "qty": 3},
+        low_confidence=[{"record": 0, "field": "price", "confidence": 0.3}],
+    )
+    client = FakeLLMClient(json.dumps({"price": 12.5}))
+    result = RepairStage(schema=_schema(), client=client, max_rounds=3).run(
+        doc, Context()
+    )
+
+    assert result.records[0].fields["price"] == 12.5
+    # One round only: round 2 sees price is repaired (excluded from the stale
+    # low_confidence list) and no field is missing, so the loop breaks.
+    assert client.call_count == 1
+    assert result.artifacts["repair"] == [
+        {"record": 0, "round": 1, "fields": ["price"]}
+    ]
+
+
 def test_artifacts_repair_records_fields() -> None:
     doc = _doc({"name": "Widget", "sku": "", "price": 12.5, "qty": 3})
     client = FakeLLMClient(json.dumps({"sku": "W-1"}))

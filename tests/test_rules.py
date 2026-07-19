@@ -41,7 +41,11 @@ def test_sum_equals_pass_and_mapping_error() -> None:
         Context(),
     )
     assert ok.artifacts["rule_violations"] == []
-    assert ok.artifacts["rules"] == {"checked": 1, "violations": 0}
+    assert ok.artifacts["rules"] == {
+        "checked": 1,
+        "violations": 0,
+        "cannot_evaluate": 0,
+    }
 
     bad = stage.run(
         _doc({"subtotal": 110, "tax": 10, "total": 110}),
@@ -94,7 +98,10 @@ def test_range_and_non_negative() -> None:
     assert bad.artifacts["rules"]["violations"] == 2
 
 
-def test_missing_and_non_numeric_produce_clear_violation() -> None:
+def test_missing_and_non_numeric_are_cannot_evaluate_not_violations() -> None:
+    """A rule that cannot run (missing / non-numeric input) is reported as
+    ``cannot_evaluate`` — separate from a rule that ran and failed — so the
+    violation rate is not inflated by un-runnable rules."""
     stage = RuleValidateStage(
         rules=[
             {
@@ -120,15 +127,21 @@ def test_missing_and_non_numeric_produce_clear_violation() -> None:
         ),
         Context(),
     )
-    violations = result.artifacts["rule_violations"]
-    assert len(violations) == 4
-    by_rule = {v["rule"]: v["detail"] for v in violations}
+    # None of these ran successfully, so none are real violations.
+    assert result.artifacts["rule_violations"] == []
+    uneval = result.artifacts["rule_uneval"]
+    assert len(uneval) == 4
+    by_rule = {v["rule"]: v["detail"] for v in uneval}
     assert "missing/non-numeric" in by_rule["sum_equals"]
     assert "tax" in by_rule["sum_equals"]
     assert "missing/non-numeric" in by_rule["range"]
     assert "missing/non-numeric" in by_rule["non_negative"]
     assert "missing" in by_rule["in_set"]
-    assert result.artifacts["rules"] == {"checked": 4, "violations": 4}
+    assert result.artifacts["rules"] == {
+        "checked": 4,
+        "violations": 0,
+        "cannot_evaluate": 4,
+    }
 
 
 def test_stage_aggregates_multiple_rules_and_records() -> None:
@@ -150,7 +163,11 @@ def test_stage_aggregates_multiple_rules_and_records() -> None:
         ),
         Context(),
     )
-    assert result.artifacts["rules"] == {"checked": 6, "violations": 2}
+    assert result.artifacts["rules"] == {
+        "checked": 6,
+        "violations": 2,
+        "cannot_evaluate": 0,
+    }
     records = {v["record"] for v in result.artifacts["rule_violations"]}
     assert records == {1}
     rules = {v["rule"] for v in result.artifacts["rule_violations"]}

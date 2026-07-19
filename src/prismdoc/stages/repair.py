@@ -28,8 +28,20 @@ class RepairStage(Stage):
         self.client = client if client is not None else LiteLLMClient()
         self.max_rounds = max_rounds
 
-    def _failed_fields(self, record: Record, doc: Document) -> list[str]:
-        """Return schema field names that are missing/empty or low-confidence."""
+    def _failed_fields(
+        self,
+        record: Record,
+        doc: Document,
+        already_repaired: set[str],
+    ) -> list[str]:
+        """Return schema field names that are missing/empty or low-confidence.
+
+        The ``low_confidence`` artifact is a snapshot from the pre-repair
+        ConfidenceStage; it is NOT recomputed here. So a field already repaired
+        in an earlier round must not be re-selected via that stale signal —
+        ``already_repaired`` excludes it. The missing/empty check stays live each
+        round (if a repair failed to fill a required field, it is retried).
+        """
         schema_names = set(self.schema.field_names())
         failed: list[str] = []
         seen: set[str] = set()
@@ -55,6 +67,7 @@ class RepairStage(Stage):
                     isinstance(field, str)
                     and field in schema_names
                     and field not in seen
+                    and field not in already_repaired
                 ):
                     failed.append(field)
                     seen.add(field)
@@ -68,8 +81,9 @@ class RepairStage(Stage):
         repair_log: list[dict[str, Any]] = []
 
         for record_index, record in enumerate(doc.records):
+            already_repaired: set[str] = set()
             for round_num in range(1, self.max_rounds + 1):
-                failed = self._failed_fields(record, doc)
+                failed = self._failed_fields(record, doc, already_repaired)
                 if not failed:
                     break
                 specs = [s for s in self.schema.fields if s.name in failed]
@@ -82,6 +96,7 @@ class RepairStage(Stage):
                     if name in corrections:
                         record.fields[name] = corrections[name]
                         repaired_names.append(name)
+                        already_repaired.add(name)
                 repair_log.append(
                     {
                         "record": record_index,

@@ -188,25 +188,30 @@ class RuleValidateStage(Stage):
 
     def run(self, doc: Document, ctx: Context) -> Document:
         violations: list[dict[str, Any]] = []
+        uneval: list[dict[str, Any]] = []
         n_rules = len(self._checks)
         n_records = len(doc.records)
 
         for index, record in enumerate(doc.records):
             for rule_type, check in self._checks:
                 detail = check(record.fields)
-                if detail is not None:
-                    violations.append(
-                        {
-                            "record": index,
-                            "rule": rule_type,
-                            "detail": detail,
-                        }
-                    )
+                if detail is None:
+                    continue
+                # A rule that cannot run (a field is missing or non-numeric) is
+                # NOT the same as a rule that ran and failed. Lumping the two
+                # inflates the violation rate, so keep them in separate buckets.
+                entry = {"record": index, "rule": rule_type, "detail": detail}
+                if detail.startswith("cannot evaluate"):
+                    uneval.append(entry)
+                else:
+                    violations.append(entry)
 
         doc.artifacts["rule_violations"] = violations
+        doc.artifacts["rule_uneval"] = uneval
         doc.artifacts["rules"] = {
             "checked": n_rules * n_records,
             "violations": len(violations),
+            "cannot_evaluate": len(uneval),
         }
         return doc
 

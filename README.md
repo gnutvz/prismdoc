@@ -137,9 +137,14 @@ Full setup, YAML configuration, running as a service, and the dev/eval/benchmark
   + prompt + schema. Re-measure for your own document type / engine / model.
 - **Deterministic ≠ correct.** The hybrid regex tier is deterministic and free, but a regex can be
   consistently wrong — validate its fields like any other.
-- **Long-document & ensemble are basic.** Chunking is chunk→extract→merge/dedup (no cross-page entity
-  linking); ensemble is per-field majority vote (cost grows with model count). Neither is benchmarked on
-  hard cases yet.
+- **Long-document & ensemble are basic.** Chunking is chunk→extract→merge/dedup (no chunk overlap, no
+  cross-page entity linking; a single line longer than the limit becomes an over-limit chunk). Ensemble
+  is per-field majority vote **over the first record of each model** — no multi-record alignment (fine
+  for a header record, not for aligning N line items across models). Neither is benchmarked on hard cases yet.
+- **Figures need a real processor wired in.** The default `FigureProcessor` is an offline stub; the
+  measured +49-point figure→VLM result used a VLM plugged into that seam (see
+  [docs/mixed-modality.md](docs/mixed-modality.md)). The benchmark proves the *routing thesis* — text
+  alone misses figure data — not that the shipped default extracts it.
 
 ## Roadmap
 

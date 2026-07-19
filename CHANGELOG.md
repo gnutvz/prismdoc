@@ -5,6 +5,17 @@ while pre-1.0 (the public API may still change).
 
 ## Unreleased
 
+### Fixed
+- **Repair no longer re-repairs an already-fixed low-confidence field.** The `low_confidence` artifact is
+  a pre-repair snapshot that RepairStage never recomputed, so with `max_rounds > 1` a field corrected in
+  round 1 was re-selected (and re-prompted) every later round. RepairStage now tracks fields already
+  repaired via that stale signal and excludes them; a genuinely-missing field is still retried.
+- **Rule engine distinguishes "cannot evaluate" from "violation".** A rule that can't run (a field is
+  missing or non-numeric) was counted as a violation, inflating the violation rate. Those now go to a
+  separate `rule_uneval` bucket; `artifacts["rules"]` reports `violations` and `cannot_evaluate`
+  separately. `rule_violations` now contains only rules that actually ran and failed.
+
+### Added
 - **Mixed-modality benchmark** (`prismdoc.bench.infovqa`) — quantifies the figure→VLM path on
   InfographicVQA (validation, 200 distinct infographics, real ground truth from Hugging Face). Answering
   from OCR text alone scores **35.5%**; the figure→VLM path scores **84.5%** — a **+49.0-point** gap,
