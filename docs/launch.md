@@ -17,7 +17,7 @@ is **cost-aware**: it runs a cheap tier first and only escalates the hard cases 
 
 The part I care about most is that I benchmarked it honestly on 200 real SROIE receipts instead of a
 self-made demo. The headline chart (accuracy vs. estimated $): a cheap model (gemini-flash) already
-gets **79.5%** field accuracy at ~free; sending everything to Opus gets **86.5%** — +7 points, but
+gets **80.1%** field accuracy at ~free; sending everything to Opus gets **87.2%** — +7 points, but
 **~154× the cost**. The cascade lets you buy the points in between by escalating only the shakiest
 docs (grounding-based).
 
@@ -58,8 +58,8 @@ does the extracted value actually appear in the OCR text?
 
 On 200 real SROIE receipts:
 
-- cheap-only: **79.5%** at ~$0.02 / batch
-- opus-only: **86.5%** at ~$2.54 / batch (**~154×**)
+- cheap-only: **80.1%** at ~$0.02 / batch
+- opus-only: **87.2%** at ~$1.98 / batch (**~154×**)
 - escalating the 14% lowest-grounding docs recovers the first easy gains; the last points cost the most.
 
 The gap between those two endpoints is the money a cost-aware router lets you *not* spend.

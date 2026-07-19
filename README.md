@@ -271,6 +271,22 @@ python -m prismdoc.eval.sweep \
 Writes `threshold,accuracy,total_usd,escalations` and prints a table. `--plot` is skipped
 cleanly when matplotlib is not installed.
 
+## Known limitations (honest)
+
+- **Benchmark is one dataset, preliminary.** Numbers are SROIE receipts (n≈158), estimated cost. A
+  per-feature **ablation** (does each module actually lift accuracy / reduce review?) is not done yet —
+  the features are implemented and unit-tested, but their uplift on real data is unproven.
+- **Provenance is reverse-located.** It finds each extracted value back in the parsed text
+  (page/bbox/source) — best-effort, and can be ambiguous when the same value (e.g. `10.00`) appears in
+  several places. It is not native OCR-token → field lineage.
+- **Confidence calibration is dataset-specific.** The measured map is for *these* receipts + OCR + model
+  + prompt + schema. Re-measure for your own document type / engine / model.
+- **Deterministic ≠ correct.** The hybrid regex tier is deterministic and free, but a regex can be
+  consistently wrong — validate its fields like any other.
+- **Long-document & ensemble are basic.** Chunking is chunk→extract→merge/dedup (no cross-page entity
+  linking); ensemble is per-field majority vote (cost grows with model count). Neither is benchmarked on
+  hard cases yet.
+
 ## Roadmap
 
 Done (v0.3.0):

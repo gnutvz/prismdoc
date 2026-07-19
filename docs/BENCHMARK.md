@@ -147,9 +147,15 @@ Reading:
 The point of the whole project: run a cheap model, and **escalate only the hard cases to a strong,
 expensive model**. Here the cascade is `gemini-3-flash → claude-opus`, escalating a receipt when the
 cheap model's output is poorly **grounded** in the OCR text (a proxy for "the cheap answer is shaky").
-Both models were run once per receipt and the cascade simulated at several grounding thresholds.
 
-**n = 200 SROIE receipts.** Cost is **estimated** (hypothetical API prices — the CLI backends are
+**Measured, not simulated.** These numbers come from running the **actual `CascadeStage`** end-to-end
+(the cheap/strong model outputs are replayed from cache, but the real cascade code decides escalation,
+selects the result, and records cost). Cross-checking the real run against an in-memory simulation on
+the same 158 receipts: **accuracy matched exactly**, and doing this **caught a real bug** — escalated
+documents were undercounting cost by the cheap tier (the cost ledger dropped the primary's spend on
+escalation). Fixed in v0.4.0.
+
+**n = 158 SROIE receipts.** Cost is **estimated** (hypothetical API prices — the CLI backends are
 actually free via Claude Max / Cursor Pro): gemini-flash ≈ $0.10/$0.40 per 1M in/out,
 opus ≈ $15/$75 per 1M.
 
@@ -157,25 +163,25 @@ opus ≈ $15/$75 per 1M.
 
 | Escalation threshold | % escalated | accuracy | est. cost / batch |
 |----------------------|-------------|----------|-------------------|
-| 0.00 (cheap only)    | 0%          | 0.795    | $0.017            |
-| 0.26                 | 2%          | 0.795    | $0.076            |
-| 0.51                 | 14%         | 0.802    | $0.365            |
-| 0.76                 | 50%         | 0.834    | $1.297            |
-| 1.01 (strong only)   | 100%        | **0.865**| $2.541            |
+| 0.00 (cheap only)    | 0%          | 0.801    | $0.013            |
+| 0.26                 | 2%          | 0.801    | $0.049            |
+| 0.51                 | 12%         | 0.809    | $0.265            |
+| 0.76                 | 47%         | 0.843    | $0.970            |
+| 1.01 (strong only)   | 100%        | **0.872**| $1.978            |
 
 **Reading the frontier:**
 
-- The cheap model alone (gemini-3-flash) already reaches **79.5%** at near-zero cost.
-- Sending **everything** to opus reaches **86.5%** — **+7 points** — but costs **~154×** more.
+- The cheap model alone (gemini-3-flash) already reaches **80.1%** at near-zero cost.
+- Sending **everything** to opus reaches **87.2%** — **+7 points** — but costs **~154×** more.
 - Grounding-based escalation is a real Pareto curve: accuracy rises monotonically as you escalate more.
-  Escalating just the **14%** lowest-grounding receipts buys the first easy gain; reaching the top costs
-  the most (50% escalation → 83.4% at $1.30; 100% → 86.5% at $2.54). That gap is exactly the money the
+  Escalating just the **12%** lowest-grounding receipts buys the first easy gain; reaching the top costs
+  the most (47% escalation → 84.3% at $0.97; 100% → 87.2% at $1.98). That gap is exactly the money the
   cost-aware cascade lets you *not* spend — pick the threshold that fits your accuracy/cost budget
   instead of paying for the strong model on every document.
 
-**Caveats:** n = 200 (preliminary, ±0.05); costs are estimated at reference API prices; grounding
-is a heuristic escalation signal. Reproduce with `prismdoc.eval.sweep` on a cascade config once a
-hosted model is wired.
+**Caveats:** n = 158 (preliminary, ±0.05); costs are estimated at reference API prices; grounding
+is a heuristic escalation signal. Per-feature ablation (does each module actually lift accuracy?) is
+the next benchmark. Reproduce with `prismdoc.eval.sweep` on a cascade config once a hosted model is wired.
 
 ## Confidence calibration
 

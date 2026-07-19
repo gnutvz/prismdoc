@@ -6,8 +6,9 @@ while pre-1.0 (the public API may still change).
 ## Unreleased
 
 - **Hybrid deterministic + LLM extraction** (`HybridExtractStage`) — extract simple fields (regex /
-  number / currency / date / email) deterministically for free and 100% stable; call the LLM only for
-  the remaining fields. Adds a `$0` deterministic tier below the LLM cascade.
+  number / currency / date / email) deterministically for free — deterministic and cheap, though NOT a
+  correctness guarantee (a regex can be consistently wrong); the LLM handles only the remaining fields.
+  Adds a `$0` deterministic tier below the LLM cascade.
 
 ## v0.4.0 — reliability & auditability
 
@@ -30,7 +31,8 @@ Addresses a full external code review. Every item was built as a ticket, reviewe
 
 ### Benchmark
 - **Cost-aware cascade frontier on 200 real SROIE receipts** (`docs/BENCHMARK.md`, `docs/img/frontier.png`):
-  cheap model 79.5% at ~free vs strong model 86.5% at ~154× cost; grounding-based escalation is a
+  cheap model 80.1% at ~free vs strong model 87.2% at ~154× cost (n=158, measured via the real
+  CascadeStage); grounding-based escalation is a
   monotone Pareto curve. Backends run free via CLI subscriptions; USD estimated.
 
 ## v0.3.0
