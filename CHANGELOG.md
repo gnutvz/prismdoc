@@ -3,6 +3,12 @@
 All notable changes to prismdoc. Format loosely follows [Keep a Changelog]; versions are semver-ish
 while pre-1.0 (the public API may still change).
 
+## Unreleased
+
+- **Hybrid deterministic + LLM extraction** (`HybridExtractStage`) — extract simple fields (regex /
+  number / currency / date / email) deterministically for free and 100% stable; call the LLM only for
+  the remaining fields. Adds a `$0` deterministic tier below the LLM cascade.
+
 ## v0.4.0 — reliability & auditability
 
 Addresses a full external code review. Every item was built as a ticket, reviewed, and verified.

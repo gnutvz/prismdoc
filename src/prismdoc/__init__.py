@@ -25,6 +25,7 @@ from prismdoc.stages.chunked_extract import ChunkedExtractStage, chunk_text
 from prismdoc.stages.confidence import ConfidenceStage
 from prismdoc.stages.ensemble import EnsembleExtractStage
 from prismdoc.stages.extract import ExtractStage, LLMClient
+from prismdoc.stages.hybrid_extract import HybridExtractStage
 from prismdoc.stages.figures import (
     Figure,
     FigureExtractStage,
@@ -61,6 +62,7 @@ __all__ = [
     "FigureMergeStage",
     "FigureProcessStage",
     "FigureProcessor",
+    "HybridExtractStage",
     "IngestStage",
     "InputTooLargeError",
     "LLMClient",

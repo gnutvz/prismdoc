@@ -242,6 +242,7 @@ def _ensure_plugins() -> None:
     from prismdoc.stages.ensemble import register_plugins as register_ensemble
     from prismdoc.stages.extract import register_plugins as register_extract
     from prismdoc.stages.figures import register_plugins as register_figures
+    from prismdoc.stages.hybrid_extract import register_plugins as register_hybrid
     from prismdoc.stages.ingest import register_plugins as register_ingest
     from prismdoc.stages.normalize import register_plugins as register_normalize
     from prismdoc.stages.parse import register_plugins as register_parse
@@ -256,6 +257,7 @@ def _ensure_plugins() -> None:
     register_extract()
     register_chunked()
     register_ensemble()
+    register_hybrid()
     register_table_extract()
     register_validate()
     register_normalize()
