@@ -167,6 +167,13 @@ Declared via `figures.extract → figures.process → figures.merge` (see
 `examples/retail/pipeline_figures.yaml`). The processor is pluggable — the default is an offline stub;
 an OCR/VLM processor slots in without changing the round-trip.
 
+This is where a composed pipeline beats any single tool: on a mixed-modality document (text + charts +
+diagrams), text-only extraction is blind to figures and whole-page VLM is costly/inconsistent — routing
+text→text and figure→VLM, then merging, gives the complete result. See
+**[docs/mixed-modality.md](docs/mixed-modality.md)** for a real case study (a paper whose embedded
+infographic holds data — `Canada Post 53,000, UPS 12,000…` — that text-only drops and the composed
+pipeline recovers).
+
 ## Structured extraction with an LLM
 
 The `extract.default` stage is schema-driven and provider-agnostic via
