@@ -276,6 +276,27 @@ def _parse_structured_records(raw: str) -> list[dict[str, Any]] | None:
     records = data.get("records")
     if not isinstance(records, list):
         return None
+    return _coerce_records(data)
+
+
+def _coerce_records(data: Any) -> list[dict[str, Any]] | None:
+    """Normalize parsed JSON into a list of record objects, or None if shape is wrong.
+
+    - A list of objects is returned as-is.
+    - A dict with a ``records`` list is unwrapped to that list.
+    - Any other dict is treated as a single record (repair single-object case).
+    """
+    if isinstance(data, list):
+        records = data
+    elif isinstance(data, dict):
+        maybe = data.get("records")
+        if isinstance(maybe, list):
+            records = maybe
+        else:
+            return [data]
+    else:
+        return None
+
     out: list[dict[str, Any]] = []
     for item in records:
         if not isinstance(item, dict):
@@ -290,7 +311,8 @@ def _parse_structured_records(raw: str) -> list[dict[str, Any]] | None:
 def _parse_records_json(raw: str) -> list[dict[str, Any]]:
     """Parse a JSON array or single object from LLM output; strip fences if present.
 
-    A top-level object ``{field: value, ...}`` is treated as one record.
+    A top-level ``{"records": [...]}`` envelope is unwrapped. A bare object
+    ``{field: value, ...}`` (no ``records`` list) is treated as one record.
     """
     candidates = _json_candidates(raw)
     last_error: Exception | None = None
@@ -300,18 +322,9 @@ def _parse_records_json(raw: str) -> list[dict[str, Any]]:
         except json.JSONDecodeError as exc:
             last_error = exc
             continue
-        if isinstance(data, list):
-            records: list[dict[str, Any]] = []
-            for item in data:
-                if not isinstance(item, dict):
-                    raise ValueError(
-                        "Extract stage expected a JSON array of objects; "
-                        f"got element of type {type(item).__name__}"
-                    )
-                records.append(item)
-            return records
-        if isinstance(data, dict):
-            return [data]
+        coerced = _coerce_records(data)
+        if coerced is not None:
+            return coerced
         last_error = ValueError(
             f"Extract stage expected a JSON array or object; "
             f"got {type(data).__name__}"

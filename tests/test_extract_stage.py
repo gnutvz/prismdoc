@@ -220,6 +220,68 @@ def test_extract_parses_structured_records_object() -> None:
     assert result.records[1].fields["sku"] == "W-002"
 
 
+def _run_extract(response: str) -> Document:
+    doc = Document(
+        source=Source(path="/tmp/catalog.md"),
+        artifacts={"parsed_markdown": "catalog text"},
+    )
+    return ExtractStage(
+        schema=_product_schema(),
+        client=FakeLLMClient(response),
+    ).run(doc, Context())
+
+
+def test_extract_unwraps_records_envelope_bare() -> None:
+    import json
+
+    payload = json.dumps({"records": [{"a": 1}, {"a": 2}]})
+    result = _run_extract(payload)
+
+    assert [r.fields for r in result.records] == [{"a": 1}, {"a": 2}]
+    assert "records" not in result.records[0].fields
+
+
+def test_extract_unwraps_records_envelope_fenced() -> None:
+    import json
+
+    inner = json.dumps({"records": [{"a": 1}, {"a": 2}]})
+    fenced = f"```json\n{inner}\n```"
+    result = _run_extract(fenced)
+
+    assert [r.fields for r in result.records] == [{"a": 1}, {"a": 2}]
+
+
+def test_extract_unwraps_records_envelope_with_prose() -> None:
+    import json
+
+    inner = json.dumps({"records": [{"a": 1}, {"a": 2}]})
+    wrapped = f"Here is the extraction:\n{inner}\nHope that helps!"
+    result = _run_extract(wrapped)
+
+    assert [r.fields for r in result.records] == [{"a": 1}, {"a": 2}]
+
+
+def test_extract_bare_array_and_plain_object_unchanged() -> None:
+    import json
+
+    array_result = _run_extract(json.dumps([{"a": 1}, {"a": 2}]))
+    assert [r.fields for r in array_result.records] == [{"a": 1}, {"a": 2}]
+
+    single_result = _run_extract(json.dumps({"a": 1}))
+    assert len(single_result.records) == 1
+    assert single_result.records[0].fields == {"a": 1}
+
+
+def test_extract_unwraps_envelope_regression_invoice_fields() -> None:
+    """CLI / non-structured clients often return the envelope as plain text."""
+    payload = '{"records": [{"invoice_number": "X", "total": 5}]}'
+    result = _run_extract(payload)
+
+    assert len(result.records) == 1
+    assert result.records[0].fields == {"invoice_number": "X", "total": 5}
+    assert "records" not in result.records[0].fields
+
+
 def test_extract_passes_response_format_to_client() -> None:
     class SpyLLMClient(LLMClient):
         def __init__(self) -> None:
