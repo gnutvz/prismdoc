@@ -208,14 +208,24 @@ class CascadeStage(Stage):
     def run(self, doc: Document, ctx: Context) -> Document:
         # Snapshot pre-primary state so fallback can re-do the step cleanly.
         baseline = doc.model_copy(deep=True)
+        baseline_cost = baseline.artifacts.get("cost")
         primary_doc = self.primary.run(doc, ctx)
         score = float(self.scorer(primary_doc))
         if score < self.threshold:
             # Primary was paid for even though we discard its other artifacts.
+            # Merge only the primary's DELTA over the baseline ledger so any
+            # pre-cascade cost (already on the fallback result) is not double-counted.
+            # Compute delta before fallback mutates the baseline ledger in place.
             primary_cost = primary_doc.artifacts.get("cost")
-            result = self.fallback.run(baseline, ctx)
+            delta: CostLedger | None = None
             if isinstance(primary_cost, CostLedger):
-                _merge_cost_ledger(result, primary_cost)
+                baseline_ledger = (
+                    baseline_cost if isinstance(baseline_cost, CostLedger) else None
+                )
+                delta = _primary_cost_delta(primary_cost, baseline_ledger)
+            result = self.fallback.run(baseline, ctx)
+            if delta is not None:
+                _merge_cost_ledger(result, delta)
             tier = "fallback"
         else:
             result = primary_doc
@@ -232,6 +242,52 @@ class CascadeStage(Stage):
         else:
             result.artifacts["router"] = [entry]
         return result
+
+
+def _primary_cost_delta(
+    primary: CostLedger, baseline: CostLedger | None
+) -> CostLedger:
+    """Return cost the primary added on top of ``baseline`` (or full primary)."""
+    if baseline is None:
+        return primary
+
+    delta = CostLedger()
+    for stage_name, stage_cost in primary.by_stage.items():
+        base = baseline.by_stage.get(stage_name)
+        base_in = base.tokens_in if base is not None else 0
+        base_out = base.tokens_out if base is not None else 0
+        tokens_in = stage_cost.tokens_in - base_in
+        tokens_out = stage_cost.tokens_out - base_out
+
+        if stage_cost.usd is None and (base is None or base.usd is None):
+            usd: float | None = None
+        else:
+            primary_usd = stage_cost.usd or 0.0
+            base_usd = (base.usd or 0.0) if base is not None else 0.0
+            usd = primary_usd - base_usd
+
+        unpriced = stage_cost.unpriced and (base is None or not base.unpriced)
+        unmetered = stage_cost.unmetered and (base is None or not base.unmetered)
+
+        if (
+            tokens_in == 0
+            and tokens_out == 0
+            and (usd is None or usd == 0.0)
+            and not unpriced
+            and not unmetered
+        ):
+            continue
+
+        delta.add(
+            stage_name,
+            stage_cost.model,
+            tokens_in,
+            tokens_out,
+            usd,
+            unpriced=unpriced,
+            unmetered=unmetered,
+        )
+    return delta
 
 
 def _merge_cost_ledger(doc: Document, primary: CostLedger) -> None:

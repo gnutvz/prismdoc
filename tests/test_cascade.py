@@ -26,6 +26,7 @@ from prismdoc import (
     get_scorer,
     load_pipeline,
     make_composite,
+    record_cost,
     register_scorer,
 )
 from prismdoc.schema import FieldSpec
@@ -578,6 +579,57 @@ def test_escalated_cascade_cost_is_primary_plus_fallback() -> None:
     assert cost.tokens_out == primary_out + fallback_out
     assert cost.by_stage["extract"].usd == pytest.approx(primary_cost + fallback_cost)
     assert result.records[0].fields["name"] == "Strong"
+    assert result.artifacts["router"][0]["tier"] == "fallback"
+
+
+def test_escalated_cascade_with_pre_cost_does_not_double_count() -> None:
+    """Pre-cascade ledger + primary delta + fallback — pre_cost counted once."""
+    schema = _extract_schema()
+    pre_in, pre_out = 500, 50
+    primary_in, primary_out = 1000, 200
+    fallback_in, fallback_out = 2000, 400
+    pre_cost = estimate_cost("gpt-4o-mini", pre_in, pre_out)
+    primary_cost = estimate_cost("gpt-4o-mini", primary_in, primary_out)
+    fallback_cost = estimate_cost("gpt-4o", fallback_in, fallback_out)
+    assert pre_cost is not None and primary_cost is not None and fallback_cost is not None
+
+    doc = _doc(text="Widget W-1 9.99")
+    record_cost(doc, "parse", "gpt-4o-mini", pre_in, pre_out)
+
+    primary = ExtractStage(
+        schema=schema,
+        client=_UsageLLMClient(
+            json.dumps([{"name": "Cheap", "sku": "C-1"}]),
+            prompt_tokens=primary_in,
+            completion_tokens=primary_out,
+            model="gpt-4o-mini",
+        ),
+        model="gpt-4o-mini",
+    )
+    fallback = ExtractStage(
+        schema=schema,
+        client=_UsageLLMClient(
+            json.dumps([{"name": "Strong", "sku": "S-1"}]),
+            prompt_tokens=fallback_in,
+            completion_tokens=fallback_out,
+            model="gpt-4o",
+        ),
+        model="gpt-4o",
+    )
+    result = CascadeStage(
+        primary=primary,
+        fallback=fallback,
+        scorer=_always(0.0),
+        threshold=0.5,
+    ).run(doc, Context())
+
+    cost = result.artifacts["cost"]
+    assert isinstance(cost, CostLedger)
+    assert cost.total_usd == pytest.approx(pre_cost + primary_cost + fallback_cost)
+    assert cost.tokens_in == pre_in + primary_in + fallback_in
+    assert cost.tokens_out == pre_out + primary_out + fallback_out
+    assert cost.by_stage["parse"].usd == pytest.approx(pre_cost)
+    assert cost.by_stage["extract"].usd == pytest.approx(primary_cost + fallback_cost)
     assert result.artifacts["router"][0]["tier"] == "fallback"
 
 
