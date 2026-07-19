@@ -5,6 +5,14 @@ while pre-1.0 (the public API may still change).
 
 ## Unreleased
 
+### Added
+- **Evidence-first provenance (field lineage).** `ExtractStage(evidence=True)` has the model cite the
+  exact source span it took each value from (`Record.field_evidence`); `ProvenanceStage` locates *that*
+  span (word-boundary aware) instead of reverse-searching the bare value. This resolves the ambiguity
+  when a value like `10.00` appears as subtotal / tax / total, and rejects hallucinated spans (falls back
+  to value-search, never fabricates). `FieldProvenance` gains `evidence` and `method`
+  (`evidence` | `value_search`). Fully backward compatible: no cited evidence → the old value-search path.
+
 ### Fixed
 - **Repair no longer re-repairs an already-fixed low-confidence field.** The `low_confidence` artifact is
   a pre-repair snapshot that RepairStage never recomputed, so with `max_rounds > 1` a field corrected in

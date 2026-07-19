@@ -166,19 +166,25 @@ class ExtractStage(Stage):
         model: str = "gpt-4o-mini",
         max_input_tokens: int | None = None,
         expected_output_tokens: int = 512,
+        evidence: bool = False,
         **opts: Any,
     ) -> None:
         self.schema = schema
         self.model = model
         self.max_input_tokens = max_input_tokens
         self.expected_output_tokens = expected_output_tokens
+        self.evidence = evidence
         self.client = (
             client if client is not None else LiteLLMClient(model=model, **opts)
         )
 
     def run(self, doc: Document, ctx: Context) -> Document:
         text = doc.artifacts.get("parsed_markdown") or doc.full_text
-        prompt = _build_prompt(str(text), self.schema)
+        prompt = (
+            _build_evidence_prompt(str(text), self.schema)
+            if self.evidence
+            else _build_prompt(str(text), self.schema)
+        )
         tokens_in = count_tokens(prompt, self.model)
         if (
             self.max_input_tokens is not None
@@ -199,13 +205,20 @@ class ExtractStage(Stage):
                     f"Projected cost ${projected:.6f} exceeds budget "
                     f"${budget_usd:.6f}"
                 )
-        response_format: dict[str, Any] = {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "records",
-                "schema": self.schema.json_schema(),
-            },
-        }
+        # Evidence mode adds a per-record ``_evidence`` object that a strict
+        # json_schema (additionalProperties: false) would reject, so fall back to
+        # free-form JSON and robust parsing there.
+        response_format: dict[str, Any] | None = (
+            None
+            if self.evidence
+            else {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "records",
+                    "schema": self.schema.json_schema(),
+                },
+            }
+        )
         completion = self.client.complete(prompt, response_format=response_format)
         doc.artifacts.setdefault("llm", {})["attempts"] = completion.attempts
         model_name = str(
@@ -229,7 +242,7 @@ class ExtractStage(Stage):
         parsed = _parse_structured_records(completion.text)
         if parsed is None:
             parsed = _parse_records_json(completion.text)
-        doc.records = [Record(fields=obj) for obj in parsed]
+        doc.records = [_build_record(obj, self.evidence) for obj in parsed]
         return doc
 
 
@@ -248,6 +261,23 @@ def _projected_cost(
     return current + upcoming
 
 
+def _build_record(obj: dict[str, Any], evidence: bool) -> Record:
+    """Build a Record, splitting the optional ``_evidence`` map out of ``fields``.
+
+    The extractor (evidence mode) returns each record as its schema fields plus an
+    ``_evidence`` object mapping field -> the exact source span it cited. We always
+    strip ``_evidence`` from the value fields (so it never pollutes them); in
+    evidence mode we keep it as ``field_evidence`` for the provenance stage.
+    """
+    raw_evidence = obj.pop("_evidence", None)
+    field_evidence: dict[str, str] = {}
+    if evidence and isinstance(raw_evidence, dict):
+        field_evidence = {
+            str(k): str(v) for k, v in raw_evidence.items() if v not in (None, "")
+        }
+    return Record(fields=obj, field_evidence=field_evidence)
+
+
 def _build_prompt(text: str, schema: TargetSchema) -> str:
     fields_desc = schema.describe() or "(no fields defined)"
     names = ", ".join(schema.field_names()) or "(none)"
@@ -260,6 +290,29 @@ def _build_prompt(text: str, schema: TargetSchema) -> str:
         f"{fields_desc}\n\n"
         "Return ONLY JSON (no commentary). Example shape: "
         '{"records": [{"field": "value"}, ...]}.\n\n'
+        "Document:\n"
+        f"{text}"
+    )
+
+
+def _build_evidence_prompt(text: str, schema: TargetSchema) -> str:
+    fields_desc = schema.describe() or "(no fields defined)"
+    names = ", ".join(schema.field_names()) or "(none)"
+    return (
+        "Extract ALL records from the document below and return them as JSON.\n"
+        "Respond with a JSON object whose \"records\" value is an array.\n"
+        "Each element must be an object with exactly these fields: "
+        f"{names}.\n"
+        "In ADDITION, each element must include an \"_evidence\" object mapping "
+        "each field name to the EXACT substring copied verbatim from the document "
+        "that you took the value from (include enough surrounding context — e.g. a "
+        "label — to make the location unambiguous). Copy the evidence character for "
+        "character from the document; do not paraphrase or invent it. Omit a field "
+        "from _evidence only if it is not present in the document.\n"
+        "Field specifications:\n"
+        f"{fields_desc}\n\n"
+        "Return ONLY JSON (no commentary). Example shape: "
+        '{"records": [{"total": "10.00", "_evidence": {"total": "TOTAL 10.00"}}]}.\n\n'
         "Document:\n"
         f"{text}"
     )

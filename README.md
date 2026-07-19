@@ -140,9 +140,12 @@ Full setup, YAML configuration, running as a service, and the dev/eval/benchmark
   domains ([docs/ABLATION.md](docs/ABLATION.md)) is now done and is deliberately honest: cascade and
   ensemble help (where there is headroom), repair is ~neutral, and the naïve deterministic **hybrid tier
   actively hurts** (−27 to −33 points) — use it only with anchored regex, not the generic matchers.
-- **Provenance is reverse-located.** It finds each extracted value back in the parsed text
-  (page/bbox/source) — best-effort, and can be ambiguous when the same value (e.g. `10.00`) appears in
-  several places. It is not native OCR-token → field lineage.
+- **Provenance is evidence-first, with a value-search fallback.** With `ExtractStage(evidence=True)` the
+  model cites the exact source span for each field; `ProvenanceStage` locates *that* span
+  (word-boundary aware), so a value like `10.00` that appears as subtotal / tax / total resolves to the
+  right line — and a hallucinated span is rejected (fall back, never fabricated). Without cited evidence
+  it reverse-locates the value (best-effort, first match). It is still not native OCR-token → field
+  lineage (no per-token bbox IDs).
 - **Confidence calibration is dataset-specific.** The measured map is for *these* receipts + OCR + model
   + prompt + schema. Re-measure for your own document type / engine / model.
 - **Deterministic ≠ correct.** The hybrid regex tier is deterministic and free, but a regex can be

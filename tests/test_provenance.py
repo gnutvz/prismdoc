@@ -296,3 +296,80 @@ def test_provenance_yaml_stage_and_exports() -> None:
         }
     )
     assert [s.name for s in pipeline.stages] == ["ingest", "provenance"]
+
+
+def _repeated_value_doc(field_evidence: dict | None = None) -> Document:
+    """A doc where 10.00 appears in three blocks (Subtotal / Tax / Total)."""
+    return Document(
+        source=Source(path="/tmp/receipt.pdf", mime="application/pdf"),
+        pages=[
+            Page(
+                index=0,
+                text="Subtotal 10.00 Tax 10.00 Total 10.00",
+                blocks=[
+                    Block(text="Subtotal 10.00", bbox=(0.0, 0.0, 1.0, 1.0)),
+                    Block(text="Tax 10.00", bbox=(0.0, 2.0, 1.0, 3.0)),
+                    Block(text="Total 10.00", bbox=(0.0, 4.0, 1.0, 5.0)),
+                ],
+            )
+        ],
+        records=[
+            Record(fields={"price": 10.00}, field_evidence=field_evidence or {})
+        ],
+    )
+
+
+def test_evidence_disambiguates_a_repeated_value() -> None:
+    """Cited evidence locates the RIGHT occurrence; bare value search would pick the first."""
+    # Without evidence: reverse value-search grabs the first block (Subtotal) — ambiguous.
+    no_ev = ProvenanceStage().run(_repeated_value_doc(), Context())
+    assert no_ev.records[0].provenance["price"].bbox == (0.0, 0.0, 1.0, 1.0)
+    assert no_ev.records[0].provenance["price"].method == "value_search"
+
+    # With evidence "Total 10.00": provenance locates the Total block instead.
+    with_ev = ProvenanceStage().run(
+        _repeated_value_doc({"price": "Total 10.00"}), Context()
+    )
+    prov = with_ev.records[0].provenance["price"]
+    assert prov.bbox == (0.0, 4.0, 1.0, 5.0)
+    assert prov.method == "evidence"
+    assert prov.evidence == "Total 10.00"
+
+
+def test_hallucinated_evidence_falls_back_to_value_search() -> None:
+    """A cited span not present in the document is not trusted; fall back, don't fabricate."""
+    doc = _repeated_value_doc({"price": "Grand Total 999.99 never in doc"})
+    result = ProvenanceStage().run(doc, Context())
+    prov = result.records[0].provenance["price"]
+    assert prov.method == "value_search"          # evidence rejected
+    assert prov.bbox == (0.0, 0.0, 1.0, 1.0)      # located the value best-effort
+
+
+def test_extract_evidence_mode_splits_field_evidence() -> None:
+    """ExtractStage(evidence=True) keeps _evidence out of fields and into field_evidence."""
+    schema = TargetSchema(fields=[FieldSpec(name="total", type="number", required=True)])
+    client = FakeLLMClient(
+        '{"records": [{"total": "10.00", "_evidence": {"total": "TOTAL 10.00"}}]}'
+    )
+    doc = Document(source=Source(path="/tmp/x.txt"))
+    doc.artifacts["parsed_markdown"] = "Some receipt TOTAL 10.00"
+    result = ExtractStage(schema, client=client, evidence=True).run(doc, Context())
+
+    rec = result.records[0]
+    assert rec.fields == {"total": "10.00"}          # _evidence stripped from values
+    assert rec.field_evidence == {"total": "TOTAL 10.00"}
+
+
+def test_extract_without_evidence_mode_ignores_evidence_key() -> None:
+    """Default mode still strips a stray _evidence but does not populate field_evidence."""
+    schema = TargetSchema(fields=[FieldSpec(name="total", type="number", required=True)])
+    client = FakeLLMClient(
+        '{"records": [{"total": "10.00", "_evidence": {"total": "TOTAL 10.00"}}]}'
+    )
+    doc = Document(source=Source(path="/tmp/x.txt"))
+    doc.artifacts["parsed_markdown"] = "Some receipt TOTAL 10.00"
+    result = ExtractStage(schema, client=client).run(doc, Context())
+
+    rec = result.records[0]
+    assert rec.fields == {"total": "10.00"}
+    assert rec.field_evidence == {}

@@ -33,11 +33,20 @@ class Page(BaseModel):
 
 
 class FieldProvenance(BaseModel):
-    """Where an extracted field value was located in the source document."""
+    """Where an extracted field value was located in the source document.
+
+    ``evidence`` is the exact source span the extractor cited for this field (its
+    lineage anchor). When present, it is what was located — resolving the ambiguity
+    of a bare value (e.g. ``10.00``) that appears in several places. ``method``
+    records how the location was obtained: ``"evidence"`` (model-cited span, the
+    reliable path) or ``"value_search"`` (post-hoc reverse match, best-effort).
+    """
 
     page: int | None = None
     bbox: tuple[float, float, float, float] | None = None
     source_text: str = ""
+    evidence: str = ""
+    method: str = "value_search"
 
 
 class Record(BaseModel):
@@ -46,6 +55,9 @@ class Record(BaseModel):
     fields: dict[str, Any]
     confidence: dict[str, float] = Field(default_factory=dict)
     provenance: dict[str, FieldProvenance] = Field(default_factory=dict)
+    # Exact source spans the extractor cited per field (evidence-first lineage);
+    # populated by ExtractStage(evidence=True), consumed by ProvenanceStage.
+    field_evidence: dict[str, str] = Field(default_factory=dict)
 
 
 class TraceEntry(BaseModel):
