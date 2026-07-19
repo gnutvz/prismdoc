@@ -184,7 +184,13 @@ Done (v0.4.0) — reliability & auditability:
 - [x] Observability signals (per-stage latency, escalation/violation rates, tokens, cost)
 - [x] Long-document chunking (chunk → extract → merge/dedup)
 - [x] Model ensemble + disagreement flags
-- [x] Mixed-modality benchmark (InfographicVQA: figure→VLM path, +49.0 pts over text-only)
+
+Done (v0.5.0) — evidence, benchmarks & honest ablation:
+
+- [x] Evidence-first provenance (model-cited source spans → field lineage; `ExtractStage(evidence=True)`)
+- [x] Mixed-modality benchmark (InfographicVQA: figure→VLM path, +49.0 pts over text-only, n=200)
+- [x] Per-module ablation across two domains (receipts + invoices) — [docs/ABLATION.md](docs/ABLATION.md)
+- [x] Repair stale-artifact fix + rules `cannot_evaluate` vs `violation` split
 
 Next (still in-scope for a focused workflow service):
 

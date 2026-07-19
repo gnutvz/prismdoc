@@ -3,7 +3,7 @@
 All notable changes to prismdoc. Format loosely follows [Keep a Changelog]; versions are semver-ish
 while pre-1.0 (the public API may still change).
 
-## Unreleased
+## v0.5.0 — evidence, benchmarks & honest ablation
 
 ### Added
 - **Evidence-first provenance (field lineage).** `ExtractStage(evidence=True)` has the model cite the
@@ -12,18 +12,6 @@ while pre-1.0 (the public API may still change).
   when a value like `10.00` appears as subtotal / tax / total, and rejects hallucinated spans (falls back
   to value-search, never fabricates). `FieldProvenance` gains `evidence` and `method`
   (`evidence` | `value_search`). Fully backward compatible: no cited evidence → the old value-search path.
-
-### Fixed
-- **Repair no longer re-repairs an already-fixed low-confidence field.** The `low_confidence` artifact is
-  a pre-repair snapshot that RepairStage never recomputed, so with `max_rounds > 1` a field corrected in
-  round 1 was re-selected (and re-prompted) every later round. RepairStage now tracks fields already
-  repaired via that stale signal and excludes them; a genuinely-missing field is still retried.
-- **Rule engine distinguishes "cannot evaluate" from "violation".** A rule that can't run (a field is
-  missing or non-numeric) was counted as a violation, inflating the violation rate. Those now go to a
-  separate `rule_uneval` bucket; `artifacts["rules"]` reports `violations` and `cannot_evaluate`
-  separately. `rule_violations` now contains only rules that actually ran and failed.
-
-### Added
 - **Per-module ablation across two domains** (`docs/ABLATION.md`) — measures the accuracy delta of each
   module (hybrid, repair, ensemble, cascade, strong) on SROIE receipts (n=60) and invoices (n=45) vs a
   cheap-model baseline, plus a rules-as-detector study. Deliberately honest findings: cascade/ensemble
@@ -39,6 +27,16 @@ while pre-1.0 (the public API may still change).
   number / currency / date / email) deterministically for free — deterministic and cheap, though NOT a
   correctness guarantee (a regex can be consistently wrong); the LLM handles only the remaining fields.
   Adds a `$0` deterministic tier below the LLM cascade.
+
+### Fixed
+- **Repair no longer re-repairs an already-fixed low-confidence field.** The `low_confidence` artifact is
+  a pre-repair snapshot that RepairStage never recomputed, so with `max_rounds > 1` a field corrected in
+  round 1 was re-selected (and re-prompted) every later round. RepairStage now tracks fields already
+  repaired via that stale signal and excludes them; a genuinely-missing field is still retried.
+- **Rule engine distinguishes "cannot evaluate" from "violation".** A rule that can't run (a field is
+  missing or non-numeric) was counted as a violation, inflating the violation rate. Those now go to a
+  separate `rule_uneval` bucket; `artifacts["rules"]` reports `violations` and `cannot_evaluate`
+  separately. `rule_violations` now contains only rules that actually ran and failed.
 
 ## v0.4.0 — reliability & auditability
 
