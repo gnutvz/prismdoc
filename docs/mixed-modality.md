@@ -12,7 +12,7 @@ round-trip on a real multi-figure paper.
 
 ## Quantitative result: text-only vs the figure→VLM path
 
-On **InfographicVQA** (validation split, real ground-truth answers, 80 distinct infographics streamed
+On **InfographicVQA** (validation split, real ground-truth answers, 200 distinct infographics streamed
 from Hugging Face), we compare two ways of answering the same questions:
 
 - **Text-only** — the infographic's OCR text (Amazon Textract, shipped with the dataset) → LLM.
@@ -20,19 +20,19 @@ from Hugging Face), we compare two ways of answering the same questions:
 
 ![Text-only vs figure→VLM path](img/mixed_modality.png)
 
-| Path | Accuracy (n=80) |
-|------|-----------------|
-| Text-only (OCR → LLM) | **37.5%** (30/80) |
-| Visual (figure → VLM) | **85.0%** (68/80) |
-| **Gap recovered by the figure→VLM path** | **+47.5 points** |
+| Path | Accuracy (n=200) |
+|------|------------------|
+| Text-only (OCR → LLM) | **35.5%** (71/200) |
+| Visual (figure → VLM) | **84.5%** (169/200) |
+| **Gap recovered by the figure→VLM path** | **+49.0 points** |
 
-The gap held at **exactly +47.5 points at both n=40 and n=80** — stable, not a small-sample artifact.
-The lesson: even when text-only sees the *complete* OCR text, it answers barely a third of infographic
-questions, because the answers live in **layout, chart values, and spatial relationships** that raw text
-loses. Routing the figure region to a VLM is what recovers them — the reason prismdoc's `figures.*`
-sub-pipeline exists.
+The gap stayed within **+47.5 to +49.0 points across n=40, 80, and 200** — stable, not a small-sample
+artifact. The lesson: even when text-only sees the *complete* OCR text, it answers barely a third of
+infographic questions, because the answers live in **layout, chart values, and spatial relationships**
+that raw text loses. Routing the figure region to a VLM is what recovers them — the reason prismdoc's
+`figures.*` sub-pipeline exists.
 
-Reproduce: `python -m prismdoc.bench.infovqa --n 80 --out /tmp/infovqa` (see
+Reproduce: `python -m prismdoc.bench.infovqa --n 200 --out /tmp/infovqa` (see
 `src/prismdoc/bench/infovqa.py`). Scoring is a relaxed normalized match, not official ANLS — a coarse
 readout of the gap, not a leaderboard number. A single infographic is one image, so this isolates the
 **figure→VLM contribution**; the case study below shows the full route-and-merge on a multi-region
@@ -95,8 +95,8 @@ processor is swapped.
 
 ## Honest caveats
 
-- The **+47.5-point** number is on InfographicVQA with a **relaxed** match (normalized gold-in-prediction),
-  not official ANLS — read it as a coarse measure of the gap, not a leaderboard score.
+- The **+49.0-point** number (n=200) is on InfographicVQA with a **relaxed** match (normalized
+  gold-in-prediction), not official ANLS — read it as a coarse measure of the gap, not a leaderboard score.
 - A single infographic is one image, so the benchmark isolates the **figure→VLM path's** contribution.
   It does not, by itself, measure the full route-text-and-figures-separately-then-merge behavior — the
   case study above shows that on a multi-region document, but qualitatively.

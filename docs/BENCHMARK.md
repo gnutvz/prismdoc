@@ -215,7 +215,7 @@ The cascade and OCR-recall sections above measure the **text** path. This sectio
 **figure→VLM** path adds on documents whose answers live inside images — the reason prismdoc routes
 figures out to a VLM and merges them back.
 
-**Dataset:** InfographicVQA (validation split, real ground-truth answers), 80 distinct infographics
+**Dataset:** InfographicVQA (validation split, real ground-truth answers), 200 distinct infographics
 streamed from the Hugging Face datasets-server (no full download, no RRC registration). Each item's own
 Amazon Textract OCR is used for the text-only baseline, so text-only sees *all* the text — just not the
 layout.
@@ -227,17 +227,17 @@ layout.
 
 ![Text-only vs figure→VLM path](img/mixed_modality.png)
 
-| Path | Accuracy (n=80) |
-|------|-----------------|
-| Text-only (OCR → LLM) | **37.5%** (30/80) |
-| Visual (figure → VLM) | **85.0%** (68/80) |
-| **Gap recovered by the figure→VLM path** | **+47.5 points** |
+| Path | Accuracy (n=200) |
+|------|------------------|
+| Text-only (OCR → LLM) | **35.5%** (71/200) |
+| Visual (figure → VLM) | **84.5%** (169/200) |
+| **Gap recovered by the figure→VLM path** | **+49.0 points** |
 
-The gap was **identical at n=40 and n=80** (+47.5 pts) — stable, not a small-sample fluke. Even with the
-full OCR text in hand, text-only answers barely a third of infographic questions; the answers depend on
-chart values and spatial layout that raw text drops.
+The gap stayed within **+47.5 to +49.0 pts across n=40, 80, and 200** — stable, not a small-sample fluke.
+Even with the full OCR text in hand, text-only answers barely a third of infographic questions; the
+answers depend on chart values and spatial layout that raw text drops.
 
-**Reproduce:** `python -m prismdoc.bench.infovqa --n 80 --out /tmp/infovqa` (source:
+**Reproduce:** `python -m prismdoc.bench.infovqa --n 200 --out /tmp/infovqa` (source:
 `src/prismdoc/bench/infovqa.py`).
 
 **Honest scope:** scoring is a **relaxed** normalized match (gold-in-prediction), not official ANLS — a

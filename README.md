@@ -171,9 +171,9 @@ This is where a composed pipeline beats any single tool: on a mixed-modality doc
 diagrams), text-only extraction is blind to figures and whole-page VLM is costly/inconsistent — routing
 text→text and figure→VLM, then merging, gives the complete result.
 
-**Measured** on InfographicVQA (validation, 80 distinct infographics with ground truth): answering from
-the **OCR text alone scores 37.5%**, but the **figure→VLM path scores 85.0%** — a **+47.5-point** gap
-(stable at both n=40 and n=80) that only the visual route recovers.
+**Measured** on InfographicVQA (validation, 200 distinct infographics with ground truth): answering from
+the **OCR text alone scores 35.5%**, but the **figure→VLM path scores 84.5%** — a **+49.0-point** gap
+(stable at +47.5 to +49.0 across n=40, 80, and 200) that only the visual route recovers.
 
 ![Text-only vs figure→VLM path](docs/img/mixed_modality.png)
 
