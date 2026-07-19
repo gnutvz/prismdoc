@@ -169,10 +169,17 @@ an OCR/VLM processor slots in without changing the round-trip.
 
 This is where a composed pipeline beats any single tool: on a mixed-modality document (text + charts +
 diagrams), text-only extraction is blind to figures and whole-page VLM is costly/inconsistent — routing
-text→text and figure→VLM, then merging, gives the complete result. See
-**[docs/mixed-modality.md](docs/mixed-modality.md)** for a real case study (a paper whose embedded
-infographic holds data — `Canada Post 53,000, UPS 12,000…` — that text-only drops and the composed
-pipeline recovers).
+text→text and figure→VLM, then merging, gives the complete result.
+
+**Measured** on InfographicVQA (validation, 80 distinct infographics with ground truth): answering from
+the **OCR text alone scores 37.5%**, but the **figure→VLM path scores 85.0%** — a **+47.5-point** gap
+(stable at both n=40 and n=80) that only the visual route recovers.
+
+![Text-only vs figure→VLM path](docs/img/mixed_modality.png)
+
+See **[docs/mixed-modality.md](docs/mixed-modality.md)** for the benchmark (reproduce with
+`python -m prismdoc.bench.infovqa`) and a real case study (a paper whose embedded infographic holds data
+— `Canada Post 53,000, UPS 12,000…` — that text-only drops and the composed pipeline recovers).
 
 ## Structured extraction with an LLM
 

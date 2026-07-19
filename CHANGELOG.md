@@ -5,6 +5,11 @@ while pre-1.0 (the public API may still change).
 
 ## Unreleased
 
+- **Mixed-modality benchmark** (`prismdoc.bench.infovqa`) — quantifies the figure→VLM path on
+  InfographicVQA (validation, 80 distinct infographics, real ground truth from Hugging Face). Answering
+  from OCR text alone scores **37.5%**; the figure→VLM path scores **85.0%** — a **+47.5-point** gap,
+  stable at both n=40 and n=80. Chart + methodology in `docs/BENCHMARK.md` and `docs/mixed-modality.md`;
+  reproduce with `python -m prismdoc.bench.infovqa`.
 - **Hybrid deterministic + LLM extraction** (`HybridExtractStage`) — extract simple fields (regex /
   number / currency / date / email) deterministically for free — deterministic and cheap, though NOT a
   correctness guarantee (a regex can be consistently wrong); the LLM handles only the remaining fields.

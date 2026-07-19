@@ -208,3 +208,39 @@ So the raw heuristic should not be read as a probability. The measured **calibra
 dataset is `{0.0: 0.00, 0.4: 0.66, 0.9: 0.83}` — apply it (via `ConfidenceStage(calibration=...)`) to
 turn the heuristic into calibrated confidence. Calibration is **dataset-specific**: measure it on your
 own labeled sample rather than hardcoding these numbers.
+
+## Mixed-modality: text-only vs the figure→VLM path
+
+The cascade and OCR-recall sections above measure the **text** path. This section measures what the
+**figure→VLM** path adds on documents whose answers live inside images — the reason prismdoc routes
+figures out to a VLM and merges them back.
+
+**Dataset:** InfographicVQA (validation split, real ground-truth answers), 80 distinct infographics
+streamed from the Hugging Face datasets-server (no full download, no RRC registration). Each item's own
+Amazon Textract OCR is used for the text-only baseline, so text-only sees *all* the text — just not the
+layout.
+
+**Two paths, same questions:**
+
+- **Text-only** — infographic OCR text → LLM → answer.
+- **Visual** — infographic image → VLM → answer (prismdoc's `figures.process`).
+
+![Text-only vs figure→VLM path](img/mixed_modality.png)
+
+| Path | Accuracy (n=80) |
+|------|-----------------|
+| Text-only (OCR → LLM) | **37.5%** (30/80) |
+| Visual (figure → VLM) | **85.0%** (68/80) |
+| **Gap recovered by the figure→VLM path** | **+47.5 points** |
+
+The gap was **identical at n=40 and n=80** (+47.5 pts) — stable, not a small-sample fluke. Even with the
+full OCR text in hand, text-only answers barely a third of infographic questions; the answers depend on
+chart values and spatial layout that raw text drops.
+
+**Reproduce:** `python -m prismdoc.bench.infovqa --n 80 --out /tmp/infovqa` (source:
+`src/prismdoc/bench/infovqa.py`).
+
+**Honest scope:** scoring is a **relaxed** normalized match (gold-in-prediction), not official ANLS — a
+coarse readout of the gap, not a leaderboard number. A single infographic is one image, so this isolates
+the **figure→VLM contribution**; the full route-and-merge on a multi-figure document is shown
+qualitatively in [mixed-modality.md](mixed-modality.md).
