@@ -219,6 +219,14 @@ DEFAULT_COLUMN_LABELS: dict[str, dict[str, list[str]]] = {
             "unit price",
         ],
     },
+    "subtotal": {
+        "expect_col": ["net", "net worth", "net amount", "subtotal", "sub-total", "total net"],
+        "reject_col": ["gross", "gross worth", "grand total", "total", "vat", "tax", "gst", "qty", "unit price"],
+    },
+    "tax": {
+        "expect_col": ["vat", "tax", "gst", "vat amount", "tax amount", "total vat"],
+        "reject_col": ["net", "net worth", "gross", "gross worth", "subtotal", "grand total", "total", "qty", "unit price"],
+    },
 }
 
 # A parsed markdown table: (header cells, data rows).

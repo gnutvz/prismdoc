@@ -17,7 +17,9 @@ while pre-1.0 (the public API may still change).
   (`Record.field_column_verification`). Measured on real Docling invoice tables (n=12): a `total` fed the
   true **gross** verifies **12/12**; fed the **net** (wrong column) it flags `column_mismatch` **10/12** —
   catching the net-as-total confusion with **0 false alarms** on the true total. This is the columnar catch
-  slice 1 structurally could not do. See [docs/VERIFICATION.md](docs/VERIFICATION.md).
+  slice 1 structurally could not do. Default column labels cover `total`, `subtotal`, and `tax` (tax
+  discriminates 12/12, subtotal 10/12, both with 0 false verifies). See
+  [docs/VERIFICATION.md](docs/VERIFICATION.md).
 - **Semantic verification, slice 1** (`LabelVerifyStage`, `prismdoc.stages.verify`) — using the source
   span the extractor cites per field (`Record.field_evidence`), verify it sits next to an expected label
   and not an anti-label (a `total` value on a `net` line), emitting `Record.field_verification`. Shipped as

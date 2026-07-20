@@ -48,6 +48,36 @@ def test_column_mismatch_net_worth() -> None:
     assert result.records[0].field_column_verification["total"] == STATUS_COLUMN_MISMATCH
 
 
+def test_subtotal_column_verified_net_worth() -> None:
+    result = _run(_doc(INVOICE_TABLE, fields={"subtotal": 7.50}))
+    assert (
+        result.records[0].field_column_verification["subtotal"] == STATUS_COLUMN_VERIFIED
+    )
+
+
+def test_subtotal_column_mismatch_gross_worth() -> None:
+    result = _run(_doc(INVOICE_TABLE, fields={"subtotal": 8.25}))
+    assert (
+        result.records[0].field_column_verification["subtotal"]
+        == STATUS_COLUMN_MISMATCH
+    )
+
+
+def test_tax_column_verified_total_vat() -> None:
+    markdown = """\
+| Description | Qty | Net worth | Total VAT | Gross worth |
+|-------------|-----|-----------|-----------|-------------|
+| Item        | 1   | 7,50      | 0,75      | 8,25        |
+"""
+    result = _run(_doc(markdown, fields={"tax": 0.75}))
+    assert result.records[0].field_column_verification["tax"] == STATUS_COLUMN_VERIFIED
+
+
+def test_tax_column_mismatch_gross_worth() -> None:
+    result = _run(_doc(INVOICE_TABLE, fields={"tax": 8.25}))
+    assert result.records[0].field_column_verification["tax"] == STATUS_COLUMN_MISMATCH
+
+
 def test_number_normalization() -> None:
     assert numbers_match(8.25, "8,25")
     assert numbers_match(57483.07, "57 483,07")

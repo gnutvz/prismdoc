@@ -113,9 +113,23 @@ Every error the verifier caught, repair corrected — the 2 misses were `column_
 never repaired, never wrongly "fixed"). This is the answer to "repair doesn't help confident-but-wrong":
 it does, once a semantic signal tells it *which* field is wrong and *why*.
 
+## Extended to subtotal and tax
+
+`DEFAULT_COLUMN_LABELS` now also covers `subtotal` (the net / pre-tax column) and `tax` (VAT/GST). Measured
+the same way on real Docling tables (n=12), feeding each field its correct column value vs. the gross:
+
+| Field | correct value → `column_verified` | gross (wrong col) → `column_mismatch` | both |
+|---|---|---|---|
+| subtotal (net) | 10/12 | 12/12 | 10/12 |
+| tax (VAT) | **12/12** | 12/12 | **12/12** |
+
+Tax discriminates perfectly; subtotal's 2 misses are `column_no_label` (never a false verify — the same
+two invoices whose net cell has an unmapped header).
+
 ## What's still open
 
 - The column verifier needs a **layout-preserving parser** (Docling/table output); on flattened OCR it
   falls back to `no_table`/`value_not_in_table` (honest, not a false verify).
-- Only `total` ships with column labels by default; other fields need their own `expect_col`/`reject_col`.
-- The 2 `column_no_label` misses want richer header handling (multi-item tables, merged summary blocks).
+- Default column labels cover `total`, `subtotal`, `tax`; other fields need their own `expect_col`/`reject_col`.
+- The 2 `column_no_label` misses want richer header handling (multi-item tables, merged summary blocks);
+  a `Net price` (unit-price) column can also match `subtotal`'s `net` label — tighten per-domain if needed.
