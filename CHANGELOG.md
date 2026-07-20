@@ -3,7 +3,7 @@
 All notable changes to prismdoc. Format loosely follows [Keep a Changelog]; versions are semver-ish
 while pre-1.0 (the public API may still change).
 
-## Unreleased
+## v0.6.0 — semantic verification (right value vs. right place)
 
 ### Added
 - **Verification-driven confidence.** A `label_mismatch` / `column_mismatch` field now caps its
@@ -12,12 +12,6 @@ while pre-1.0 (the public API may still change).
   scored low and flagged, feeding the same `low_confidence` list. End-to-end on real Docling invoices
   (n=12): the correct gross stays `0.9` / unflagged (**0/12** false flags) while the wrong-column net is
   capped `0.2` / flagged (**10/12**).
-
-### Fixed
-- **Locale-aware numeric grounding.** `value_in_text` now matches European / space-separated number formats
-  (`8,25`, `57 483,07`, `1.767,34`) in addition to US/dot formats, keeping the "no digit-soup" guard
-  (`125` ≠ inside `1250`). Previously every number on a European-formatted invoice scored ungrounded,
-  which flagged even correct values (surfaced by the confidence measurement above).
 - **Verification-driven repair (closes the confident-but-wrong loop).** `RepairStage` now triggers on a
   verification mismatch (`field_verification == "label_mismatch"` / `field_column_verification ==
   "column_mismatch"`), not only on missing/low-confidence fields, and passes the model a corrective hint
@@ -40,6 +34,12 @@ while pre-1.0 (the public API may still change).
   the false alarm from **43/43 → 0/12**: the flattened input was the cause, not the logic — so run the
   verifier on layout parse output. Resolving *which column* a number is in (net vs. gross in one summary
   row) still needs cell-level parsing (a later slice). See [docs/VERIFICATION.md](docs/VERIFICATION.md).
+
+### Fixed
+- **Locale-aware numeric grounding.** `value_in_text` now matches European / space-separated number formats
+  (`8,25`, `57 483,07`, `1.767,34`) in addition to US/dot formats, keeping the "no digit-soup" guard
+  (`125` ≠ inside `1250`). Previously every number on a European-formatted invoice scored ungrounded,
+  which flagged even correct values (surfaced by the confidence measurement above).
 
 ### Docs
 - **Repositioned around document archetypes** (flat / visual / mixed / tabular / hierarchical) with honest

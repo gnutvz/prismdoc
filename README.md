@@ -226,6 +226,15 @@ Done (v0.5.1):
 - [x] Merge per-chunk / per-model cost ledgers back into the parent document (chunked + ensemble now
   roll every sub-call up into `doc.artifacts["cost"]` and enforce the budget across sub-calls)
 
+Done (v0.6.0) — semantic verification (right value vs. right place):
+
+- [x] Label/region + table-**column** verification (`verify.label` / `verify.column`) — catches a value
+  read from the wrong column (net-as-total): gross verifies 12/12, net flagged 10/12, 0 false alarms
+- [x] Verification-driven **repair** (mismatch + hint) — fixes 10/10 of caught net-as-total errors
+- [x] Verification-driven **confidence** (mismatch caps to 0.2 + flags) — 0/12 false flags on correct
+- [x] Locale-aware numeric grounding (`8,25`, `57 483,07`, `1.767,34`)
+- [x] Repositioned around document archetypes (flat/visual/mixed proven; tabular partial; hierarchical roadmap)
+
 Next (still in-scope for a focused workflow service):
 
 - [ ] **Tabular archetype** — a table detector/extractor + a public table benchmark (e.g. FinTabNet / bank statements)
