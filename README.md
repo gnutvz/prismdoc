@@ -34,7 +34,8 @@ Plug in your own OCR / table / VLM engine; prismdoc adds the routing, quality, a
 turns a raw extractor into a trustworthy pipeline. This is real, not a slogan: the **parser is a swappable
 provider** — the same `parse → verify → repair → normalize` pipeline runs on **Docling** or **pdfplumber**
 by changing one config line (`parse.docling` → `parse.pdfplumber`); a cloud provider is added by
-implementing the one-method `Parser` interface.
+implementing the one-method `Parser` interface. Every seam — parser, model, verifier, rule, scorer,
+loader — is documented in **[docs/EXTENDING.md](docs/EXTENDING.md)**.
 
 > **How this repo is built — measure everything, publish the negatives.** Every claim here is measured on
 > **public data with ground truth**, and the docs report what *didn't* work as loudly as what did: a module
