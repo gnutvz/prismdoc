@@ -8,6 +8,7 @@ Marketing/launch copy for Show HN + a blog. Not product docs; adapt freely befor
 2. Show HN: A document pipeline where the figure→VLM path beats text-only by 49 points (measured)
 3. Show HN: prismdoc – only pay for a big model when the cheap one isn't good enough
 4. Show HN: I measured when text-only extraction fails on infographics (it's most of the time)
+5. Show HN: I ablated my own document pipeline and reported the module that makes it worse
 
 ## Show HN — body
 
@@ -30,9 +31,16 @@ distinct infographics, real ground truth): answering from **OCR text alone = 35.
 Even with the *full* OCR text in hand, text alone answers barely a third — because the answers live in
 layout and chart values that raw text drops.
 
-It also does the boring-but-necessary things: field provenance (page/bbox/source), cross-field business
-rules (catches `subtotal + tax ≠ total`), a $0 deterministic tier (regex for simple fields), model
-ensemble/disagreement, per-request cost ledger. And benchmarking embarrassed me productively — my
+**3. I ablated my own modules — and reported the one that hurts.** Across two domains (receipts +
+invoices) I measured each module against a cheap-model baseline: cascade and ensemble help where there's
+headroom, repair is ~neutral, and the naïve deterministic tier *hurts* by 27–33 points (its generic
+matcher grabs the wrong number). A bigger model isn't always better either — on invoices Opus read the
+pre-tax subtotal as the total. I'd rather ship that table than a rosy one.
+
+It also does the boring-but-necessary things: evidence-first provenance (the model cites the exact source
+span, so a value like `10.00` resolves to the right line instead of the first match), cross-field
+business rules (catches `subtotal + tax ≠ total`), a $0 deterministic tier (regex for simple fields),
+model ensemble/disagreement, per-request cost ledger. And benchmarking embarrassed me productively — my
 confidence heuristic was miscalibrated ("ungrounded" values were right 66% of the time, not the 40% my
 heuristic implied); it's now measured and calibratable.
 
@@ -44,6 +52,24 @@ Honest caveats: SROIE is n≈158 with estimated API prices; the InfographicVQA g
 scorer, the calibration, and the mixed-modality metric.
 
 Repo (MIT): https://github.com/gnutvz/prismdoc
+
+## Show HN — first comment (post immediately after submitting)
+
+Author here — a few things I'd flag before you ask:
+
+- The models ran via CLI subscriptions (Claude / Cursor), so the **USD figures are estimated** at
+  reference API prices, not billed. Treat them as relative, not a quote.
+- The mixed-modality number uses a **relaxed normalized match, not official ANLS**, and isolates the
+  figure→VLM gain — it's not the full route-and-merge on multi-region docs (that part is a qualitative
+  case study in the repo).
+- It's deliberately a **stateless microservice, not a platform** — no queues / storage / multi-tenancy
+  baked in. That's a scope decision, not a missing TODO; you wire it into your own infra.
+- The **ablation** is the part I'm most proud of and most nervous about: it shows one of my own modules
+  (the deterministic tier) actively *hurting*. If the methodology is wrong, tell me — I'd rather fix it
+  than hide it.
+
+Benchmarks, methodology, and honest caveats are all in the repo (`docs/BENCHMARK.md`, `docs/ABLATION.md`).
+Feedback very welcome — especially on the scorer, the calibration, and the mixed-modality metric.
 
 ---
 
