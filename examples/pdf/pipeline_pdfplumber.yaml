@@ -1,0 +1,11 @@
+# Minimal pipeline — same shape as a Docling PDF pipeline; the ONLY swap is
+# parse.pdfplumber vs parse.docling. Downstream stages are unchanged.
+schema:
+  fields:
+    - {name: total, type: number, required: true}
+    - {name: description, type: string}
+pipeline:
+  - ingest.default
+  - parse.pdfplumber
+  - extract.default: {model: gpt-4o-mini}
+  - verify.column

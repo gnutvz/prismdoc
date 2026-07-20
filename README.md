@@ -31,7 +31,10 @@ them:
 - **Evaluation** — measured on public ground truth, honest ablation, null results published.
 
 Plug in your own OCR / table / VLM engine; prismdoc adds the routing, quality, and auditability layer that
-turns a raw extractor into a trustworthy pipeline.
+turns a raw extractor into a trustworthy pipeline. This is real, not a slogan: the **parser is a swappable
+provider** — the same `parse → verify → repair → normalize` pipeline runs on **Docling** or **pdfplumber**
+by changing one config line (`parse.docling` → `parse.pdfplumber`); a cloud provider is added by
+implementing the one-method `Parser` interface.
 
 > **How this repo is built — measure everything, publish the negatives.** Every claim here is measured on
 > **public data with ground truth**, and the docs report what *didn't* work as loudly as what did: a module
@@ -127,7 +130,7 @@ always better. Full table and reasoning in **[docs/ABLATION.md](docs/ABLATION.md
 | **Schema-driven extraction** | `TargetSchema` → LLM (via litellm) → validated `Record`s |
 | **Figure sub-pipeline** | Extract images → `[[FIGURE:id]]` placeholder → process → merge back |
 | **Ingest** | PDF (PyMuPDF), images (Pillow), spreadsheets (openpyxl) |
-| **Parse** | Passthrough (offline) or Docling OCR (optional) |
+| **Parse** | Swappable engine by config: Passthrough (offline), Docling OCR, or pdfplumber — add a cloud provider (Textract / Azure DI / Google Doc AI) by implementing the `Parser` interface |
 | **Validate + Normalize** | Required-field checks, type coercion, whitespace/dedup cleanup |
 | **Confidence per field** | Per-field confidence + low-confidence flags in the output |
 | **Cost ledger** | Real per-stage token/USD accounting + optional per-request budget |

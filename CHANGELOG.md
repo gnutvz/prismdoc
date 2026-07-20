@@ -5,6 +5,19 @@ while pre-1.0 (the public API may still change).
 
 ## Unreleased
 
+### Added
+- **Parser is a swappable provider** — added `PdfPlumberParser` (born-digital PDF text + tables, extra
+  `prismdoc[pdfplumber]`) alongside Docling/passthrough, registered as `parse.pdfplumber`. The same
+  `parse → verify → repair → normalize` pipeline runs by changing one config line; a cloud provider
+  (Textract / Azure DI / Google Doc AI) is added by implementing the one-method `Parser` interface.
+  Verified end-to-end: a real bordered-table PDF → pdfplumber → markdown table → `verify.column`
+  discriminates gross vs net. Concrete proof of the "document middleware" thesis.
+- **Document archetype as a runtime abstraction** — `DocumentArchetype` enum + `classify_archetype()`
+  (figures/tables/headings heuristic) + `ArchetypeRouterStage` that classifies and **dispatches the
+  archetype-appropriate verifier** (tabular → `verify.column`, else → `verify.label`). Also registered
+  `verify.*` and `archetype.router` in the config bootstrap — the verification layer is now usable from
+  YAML pipelines, not only via direct import.
+
 ### Docs
 - **Honest organic-error measurement of the verification loop** (`docs/VERIFICATION.md`). Running the full
   `extract → verify → confidence → repair` pipeline with a real cheap model on non-injected data:

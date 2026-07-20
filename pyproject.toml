@@ -46,6 +46,7 @@ dev = [
     "httpx",
 ]
 docling = ["docling"]
+pdfplumber = ["pdfplumber>=0.11"]
 llm = ["litellm"]
 viz = ["matplotlib"]
 
