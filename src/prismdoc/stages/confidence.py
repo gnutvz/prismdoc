@@ -25,6 +25,7 @@ from prismdoc.stages.validate import _coerce_value, _is_missing_or_empty
 _CONF_MISSING = 0.0
 _CONF_TYPE_MISMATCH = 0.3
 _CONF_UNGROUNDED = 0.4
+_CONF_VERIFICATION_MISMATCH = 0.2
 _CONF_GROUNDED = 0.9
 
 
@@ -35,7 +36,9 @@ class ConfidenceStage(Stage):
     discrete scores (``0.0`` / ``0.3`` / ``0.4`` / ``0.9``) to measured accuracies;
     measure that map on the deployer's own labeled sample (dataset-specific). The
     SROIE map in the benchmark docs is an example, not a default. Grounding (value
-    found in source text) is the main check against hallucinations.
+    found in source text) is the main check against hallucinations. A verification
+    mismatch (label/column) caps confidence at ``_CONF_VERIFICATION_MISMATCH``; verify
+    stages must run before this stage.
     """
 
     name = "confidence"
@@ -63,6 +66,12 @@ class ConfidenceStage(Stage):
                 if not preset:
                     if self.calibration is not None:
                         score = self.calibration.get(round(score, 3), score)
+                    if (
+                        _has_verification_mismatch(record, spec.name)
+                        and score > _CONF_VERIFICATION_MISMATCH
+                    ):
+                        score = _CONF_VERIFICATION_MISMATCH
+                        reason = "verification_mismatch"
                     record.confidence[spec.name] = score
                 if score < self.threshold:
                     entry: dict[str, Any] = {
@@ -76,6 +85,13 @@ class ConfidenceStage(Stage):
 
         doc.artifacts["low_confidence"] = low
         return doc
+
+
+def _has_verification_mismatch(record: Record, field: str) -> bool:
+    return (
+        record.field_verification.get(field) == "label_mismatch"
+        or record.field_column_verification.get(field) == "column_mismatch"
+    )
 
 
 def _is_grounded(value: Any, doc_text: str) -> bool:
@@ -102,6 +118,14 @@ def _field_confidence(
         return _CONF_UNGROUNDED, "ungrounded"
 
     return _CONF_GROUNDED, None
+
+
+def register_plugins() -> None:
+    """Register the default confidence stage in the plugin registry."""
+    register("confidence.default", ConfidenceStage)
+
+
+register_plugins()
 
 
 def register_plugins() -> None:

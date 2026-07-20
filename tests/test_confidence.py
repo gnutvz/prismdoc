@@ -61,14 +61,29 @@ def _doc_with_text(
     *,
     confidence: dict[str, float] | None = None,
     artifacts: dict | None = None,
+    field_verification: dict[str, str] | None = None,
+    field_column_verification: dict[str, str] | None = None,
 ) -> Document:
     arts = dict(artifacts or {})
     arts.setdefault("parsed_markdown", text)
+    record = Record(fields=fields, confidence=confidence or {})
+    if field_verification is not None:
+        record.field_verification = dict(field_verification)
+    if field_column_verification is not None:
+        record.field_column_verification = dict(field_column_verification)
     return Document(
         source=Source(path="/tmp/x.md"),
         pages=[Page(index=0, text=text)],
-        records=[Record(fields=fields, confidence=confidence or {})],
+        records=[record],
         artifacts=arts,
+    )
+
+
+def _invoice_total_schema() -> TargetSchema:
+    return TargetSchema(
+        fields=[
+            FieldSpec(name="total", type="number", required=True),
+        ]
     )
 
 
@@ -415,3 +430,94 @@ def test_calibration_via_yaml_config() -> None:
     assert result.records[0].confidence["name"] == 0.83
     assert result.records[0].confidence["price"] == 0.66
     assert all(entry["field"] != "price" for entry in result.artifacts["low_confidence"])
+
+
+def test_column_mismatch_caps_grounded_field() -> None:
+    """Grounded value from wrong column → 0.2, not 0.9."""
+    doc = _doc_with_text(
+        {"total": 100.0},
+        "Invoice net 100.0 total 150.0",
+        field_column_verification={"total": "column_mismatch"},
+    )
+    result = ConfidenceStage(schema=_invoice_total_schema()).run(doc, Context())
+
+    assert result.records[0].confidence["total"] == 0.2
+    assert {
+        "record": 0,
+        "field": "total",
+        "confidence": 0.2,
+        "reason": "verification_mismatch",
+    } in result.artifacts["low_confidence"]
+
+
+def test_label_mismatch_caps_grounded_field() -> None:
+    """Grounded value near wrong label → 0.2, not 0.9."""
+    doc = _doc_with_text(
+        {"total": 100.0},
+        "Invoice net 100.0 total 150.0",
+        field_verification={"total": "label_mismatch"},
+    )
+    result = ConfidenceStage(schema=_invoice_total_schema()).run(doc, Context())
+
+    assert result.records[0].confidence["total"] == 0.2
+    assert {
+        "record": 0,
+        "field": "total",
+        "confidence": 0.2,
+        "reason": "verification_mismatch",
+    } in result.artifacts["low_confidence"]
+
+
+def test_no_mismatch_keeps_grounded_confidence() -> None:
+    """column_verified (or no status) leaves grounded score at 0.9."""
+    verified = _doc_with_text(
+        {"total": 150.0},
+        "Invoice net 100.0 total 150.0",
+        field_column_verification={"total": "column_verified"},
+    )
+    bare = _doc_with_text(
+        {"total": 150.0},
+        "Invoice net 100.0 total 150.0",
+    )
+    stage = ConfidenceStage(schema=_invoice_total_schema())
+
+    assert stage.run(verified, Context()).records[0].confidence["total"] == 0.9
+    assert stage.run(bare, Context()).records[0].confidence["total"] == 0.9
+
+
+def test_mismatch_only_lowers_never_raises() -> None:
+    """Missing field stays 0.0 even when a mismatch status is present."""
+    doc = _doc_with_text(
+        {},
+        "Invoice total 150.0",
+        field_column_verification={"total": "column_mismatch"},
+    )
+    result = ConfidenceStage(schema=_invoice_total_schema()).run(doc, Context())
+
+    assert result.records[0].confidence["total"] == 0.0
+    assert {
+        "record": 0,
+        "field": "total",
+        "confidence": 0.0,
+        "reason": "missing",
+    } in result.artifacts["low_confidence"]
+
+
+def test_verification_mismatch_cap_wins_over_calibration() -> None:
+    """Mismatch cap applies after calibration (0.9 → 0.83 → capped to 0.2)."""
+    doc = _doc_with_text(
+        {"total": 100.0},
+        "Invoice net 100.0 total 150.0",
+        field_column_verification={"total": "column_mismatch"},
+    )
+    result = ConfidenceStage(
+        schema=_invoice_total_schema(), calibration={0.9: 0.83}
+    ).run(doc, Context())
+
+    assert result.records[0].confidence["total"] == 0.2
+    assert {
+        "record": 0,
+        "field": "total",
+        "confidence": 0.2,
+        "reason": "verification_mismatch",
+    } in result.artifacts["low_confidence"]

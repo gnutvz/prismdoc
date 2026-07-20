@@ -126,6 +126,22 @@ the same way on real Docling tables (n=12), feeding each field its correct colum
 Tax discriminates perfectly; subtotal's 2 misses are `column_no_label` (never a false verify — the same
 two invoices whose net cell has an unmapped header).
 
+## Feeding verification into confidence
+
+A verification mismatch also **caps per-field confidence** (`ConfidenceStage`): a `label_mismatch` /
+`column_mismatch` field is scored `0.2` (below the `0.5` flag threshold, and below the `0.4` "ungrounded"
+score — a grounded-but-wrong-column value is worse than an ungrounded one), *after* any calibration, with
+reason `verification_mismatch`. So a confident-but-wrong grounded value (net-as-total would otherwise be
+`0.9`) is now scored low and flagged, feeding the same `low_confidence` list repair consumes.
+
+**Honest real-data caveat.** Measured on the 12 Docling invoices, the mismatch cap correctly ranks the
+wrong value below the right one (net → `0.2`, gross → higher). But it did NOT cleanly separate flagged vs.
+unflagged here, because these invoices use **European number formatting** (`8,25`, `57 483,07`) and the
+grounding matcher (`value_in_text`) does not yet match comma-decimals — so *every* number, including the
+correct gross, is scored `0.4` (ungrounded) and flagged. That is a separate **grounding-normalization gap**
+(not the wiring): on dot-formatted numbers the split is clean (grounded `0.9` for correct, capped `0.2` for
+mismatch, per the unit tests). Fixing locale-aware numeric grounding is the natural next step.
+
 ## What's still open
 
 - The column verifier needs a **layout-preserving parser** (Docling/table output); on flattened OCR it

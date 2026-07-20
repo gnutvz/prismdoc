@@ -6,6 +6,12 @@ while pre-1.0 (the public API may still change).
 ## Unreleased
 
 ### Added
+- **Verification-driven confidence.** A `label_mismatch` / `column_mismatch` field now caps its
+  `ConfidenceStage` score at `0.2` (after calibration, below the flag threshold), reason
+  `verification_mismatch` — so a confident-but-wrong grounded value (net-as-total, otherwise `0.9`) is
+  scored low and flagged, feeding the same `low_confidence` list. (Note: on European-formatted numbers the
+  grounding matcher does not yet match comma-decimals, which masks the split on such invoices — a separate
+  grounding-normalization gap, tracked in `docs/VERIFICATION.md`.)
 - **Verification-driven repair (closes the confident-but-wrong loop).** `RepairStage` now triggers on a
   verification mismatch (`field_verification == "label_mismatch"` / `field_column_verification ==
   "column_mismatch"`), not only on missing/low-confidence fields, and passes the model a corrective hint
