@@ -1,0 +1,3 @@
+name	sku	price
+Widget A	W-1	9.99
+Widget B	W-2	1.50

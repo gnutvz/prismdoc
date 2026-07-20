@@ -56,6 +56,7 @@ prismdoc = "prismdoc.cli:main"
 prismdoc-eval = "prismdoc.eval.__main__:main"
 prismdoc-sweep = "prismdoc.eval.sweep:main"
 prismdoc-bench = "prismdoc.bench.sroie:main"
+prismdoc-bench-hub = "prismdoc.bench.hub:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/prismdoc"]

@@ -1,0 +1,17 @@
+name: bench-smoke-offline
+schema:
+  fields:
+    - {name: name, type: string, required: true}
+    - {name: sku, type: string}
+    - {name: price, type: number}
+pipeline:
+  - ingest.default
+  - parse.passthrough
+  - extract.table
+  - validate.default
+cases:
+  - input: examples/bench/sample_table.txt
+    expected:
+      - {name: Widget A, sku: W-1, price: 9.99}
+      - {name: Widget B, sku: W-2, price: 1.50}
+    key_field: sku

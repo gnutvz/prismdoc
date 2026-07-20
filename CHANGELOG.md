@@ -6,6 +6,10 @@ while pre-1.0 (the public API may still change).
 ## Unreleased
 
 ### Added
+- **Benchmark hub** (`prismdoc-bench-hub`, `prismdoc.bench.hub`) — declare a whole benchmark in one
+  self-contained YAML (name + schema + pipeline + cases) and run it through the evaluator, no separate
+  config file. Reuses the eval harness, so you get accuracy + cost + latency + review-rate and the
+  `--model` / `--parser` swaps. `examples/bench/spec_smoke.yaml` runs fully offline.
 - **Human review as an abstraction** (`ReviewStage`, `review.default`) — turns the pipeline's uncertainty
   (`low_confidence`, `label_mismatch`, `column_mismatch`) into a structured **review queue**:
   `doc.artifacts["review"] = {items, count, needs_review}`, each item merging the field's value, reasons,
