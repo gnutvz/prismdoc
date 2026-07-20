@@ -13,6 +13,11 @@ from prismdoc.observability import aggregate_metrics, document_metrics
 from prismdoc.pipeline import Pipeline
 from prismdoc.resilience import with_retry
 from prismdoc.schema import FieldSpec, TargetSchema
+from prismdoc.stages.archetype import (
+    ArchetypeRouterStage,
+    DocumentArchetype,
+    classify_archetype,
+)
 from prismdoc.stages.base import Context, Stage
 from prismdoc.stages.cascade import (
     CascadeStage,
@@ -46,6 +51,7 @@ from prismdoc.stages.verify import LabelVerifyStage, TableColumnVerifyStage
 __version__ = "0.4.0"
 
 __all__ = [
+    "ArchetypeRouterStage",
     "Block",
     "BudgetExceededError",
     "CascadeStage",
@@ -54,6 +60,7 @@ __all__ = [
     "Context",
     "CostLedger",
     "Document",
+    "DocumentArchetype",
     "EnsembleExtractStage",
     "ExtractStage",
     "FieldProvenance",
@@ -90,6 +97,7 @@ __all__ = [
     "build_pipeline",
     "char_validity",
     "chunk_text",
+    "classify_archetype",
     "cli_main",
     "document_metrics",
     "estimate_cost",

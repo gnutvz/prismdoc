@@ -250,6 +250,8 @@ def _ensure_plugins() -> None:
     from prismdoc.stages.rules import register_plugins as register_rules
     from prismdoc.stages.table_extract import register_plugins as register_table_extract
     from prismdoc.stages.validate import register_plugins as register_validate
+    from prismdoc.stages.verify import register_plugins as register_verify
+    from prismdoc.stages.archetype import register_plugins as register_archetype
 
     register_ingest()
     register_parse()
@@ -265,3 +267,5 @@ def _ensure_plugins() -> None:
     register_provenance()
     register_rules()
     register_cascade()
+    register_verify()
+    register_archetype()
