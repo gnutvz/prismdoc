@@ -44,6 +44,7 @@ from prismdoc.stages.parse import ParseStage, Parser, PassthroughParser
 from prismdoc.stages.policy import PolicyHaltError, PolicyStage
 from prismdoc.stages.provenance import ProvenanceStage
 from prismdoc.stages.repair import RepairStage
+from prismdoc.stages.review import ReviewItem, ReviewStage
 from prismdoc.stages.rules import RuleValidateStage, get_rule, register_rule
 from prismdoc.stages.table_extract import TableExtractStage
 from prismdoc.stages.validate import ValidateStage
@@ -89,6 +90,8 @@ __all__ = [
     "ProvenanceStage",
     "Record",
     "RepairStage",
+    "ReviewItem",
+    "ReviewStage",
     "RuleValidateStage",
     "Source",
     "Stage",

@@ -6,6 +6,11 @@ while pre-1.0 (the public API may still change).
 ## Unreleased
 
 ### Added
+- **Human review as an abstraction** (`ReviewStage`, `review.default`) — turns the pipeline's uncertainty
+  (`low_confidence`, `label_mismatch`, `column_mismatch`) into a structured **review queue**:
+  `doc.artifacts["review"] = {items, count, needs_review}`, each item merging the field's value, reasons,
+  confidence, cited evidence, and provenance (page / source_text). The queue, not a UI — the deployer wires
+  their own review workflow to it.
 - **Declarative policy engine** (`PolicyStage`, `policy.default`) — gate the pipeline on its accumulated
   state: conditions (`min_confidence`, `max_total_usd`, `max_review_fields`, `has_rule_violations`) trigger
   actions (`flag_review`, `tag`, `halt`). A `halt` records the reason in `doc.artifacts["policy"]` then
