@@ -131,13 +131,33 @@ class XlsxLoader(Loader):
             workbook.close()
 
 
+class TextLoader(Loader):
+    """Load plain text / markdown files as a single page."""
+
+    name = "text"
+    extensions: tuple[str, ...] = (".txt", ".md")
+
+    def load(self, source: Source) -> list[Page]:
+        return [
+            Page(
+                index=0,
+                text=Path(source.path).read_text(encoding="utf-8", errors="replace"),
+            )
+        ]
+
+
 class IngestStage(Stage):
     """Select a loader by extension (or MIME) and populate ``doc.pages``."""
 
     name = "ingest"
 
     def __init__(self, loaders: list[Loader] | None = None) -> None:
-        self.loaders = loaders or [PdfLoader(), ImageLoader(), XlsxLoader()]
+        self.loaders = loaders or [
+            PdfLoader(),
+            ImageLoader(),
+            XlsxLoader(),
+            TextLoader(),
+        ]
         self._by_extension: dict[str, Loader] = {}
         for loader in self.loaders:
             for ext in loader.extensions:
@@ -197,6 +217,7 @@ def register_plugins() -> None:
     register("loader.pdf", PdfLoader)
     register("loader.image", ImageLoader)
     register("loader.xlsx", XlsxLoader)
+    register("loader.text", TextLoader)
     register("ingest.default", IngestStage)
 
 

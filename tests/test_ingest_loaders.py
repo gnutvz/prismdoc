@@ -106,9 +106,9 @@ def test_ingest_stage_via_pipeline(tmp_path: Path) -> None:
 
 
 def test_ingest_unsupported_extension(tmp_path: Path) -> None:
-    bad_path = tmp_path / "notes.txt"
+    bad_path = tmp_path / "notes.xyz"
     bad_path.write_text("not supported", encoding="utf-8")
-    doc = Document(source=Source(path=str(bad_path), mime="text/plain"))
+    doc = Document(source=Source(path=str(bad_path), mime="application/octet-stream"))
 
     with pytest.raises(ValueError, match="Unsupported source extension"):
         IngestStage().run(doc, Context())
@@ -152,6 +152,7 @@ def test_ingest_exports_and_registry() -> None:
     assert "loader.pdf" in keys
     assert "loader.image" in keys
     assert "loader.xlsx" in keys
+    assert "loader.text" in keys
     assert "ingest.default" in keys
 
     stage = registry.create("ingest.default")

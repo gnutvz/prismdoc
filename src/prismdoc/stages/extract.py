@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -82,6 +83,28 @@ def _is_transient(exc: BaseException) -> bool:
     if types is None:
         return isinstance(exc, (ConnectionError, TimeoutError))
     return isinstance(exc, types)
+
+
+class CliLLMClient(LLMClient):
+    """Run extraction through a local CLI (prompt appended as final argv)."""
+
+    def __init__(self, command: list[str], timeout: int = 150) -> None:
+        self.command = command
+        self.timeout = timeout
+
+    def complete(
+        self, prompt: str, *, response_format: dict[str, Any] | None = None
+    ) -> Completion:
+        try:
+            result = subprocess.run(
+                [*self.command, prompt],
+                capture_output=True,
+                text=True,
+                timeout=self.timeout,
+            )
+            return Completion(text=result.stdout.strip(), usage=None)
+        except Exception:
+            return Completion(text="")
 
 
 class LiteLLMClient(LLMClient):

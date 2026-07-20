@@ -6,6 +6,10 @@ while pre-1.0 (the public API may still change).
 ## Unreleased
 
 ### Added
+- **More plugin adapters** — a `CliLLMClient` **model provider** (run extraction through any local CLI —
+  `CliLLMClient(["claude", "-p"])` — no API cost, never raises) and a `TextLoader` for `.txt`/`.md` inputs
+  (wired into the default `IngestStage`). Verified end-to-end: a `.txt` receipt → TextLoader → CliLLMClient
+  → correct `{total, date}`. Concrete examples of the model + loader seams in `docs/EXTENDING.md`.
 - **Evaluator surface** — `prismdoc-eval` now reports **latency (p50/p95)** and **review-rate** (fraction of
   cases flagged low-confidence) alongside accuracy / escalation / cost, and takes `--model` and `--parser`
   overrides so you can measure the *same dataset* across providers/models from one command. Reuses the
