@@ -10,8 +10,10 @@ while pre-1.0 (the public API may still change).
   span the extractor cites per field (`Record.field_evidence`), verify it sits next to an expected label
   and not an anti-label (a `total` value on a `net` line), emitting `Record.field_verification`. Shipped as
   **infrastructure**, with an honest measured limitation: on real, flattened, *columnar* invoice summaries
-  it 100% false-alarms — text-window label proximity cannot resolve which column a number is in. See
-  [docs/VERIFICATION.md](docs/VERIFICATION.md); layout/bbox-aware verification is slice 2.
+  it 100% false-alarms on flattened OCR. Re-measuring with a **layout-preserving parse** (Docling) drops
+  the false alarm from **43/43 → 0/12**: the flattened input was the cause, not the logic — so run the
+  verifier on layout parse output. Resolving *which column* a number is in (net vs. gross in one summary
+  row) still needs cell-level parsing (a later slice). See [docs/VERIFICATION.md](docs/VERIFICATION.md).
 
 ### Docs
 - **Repositioned around document archetypes** (flat / visual / mixed / tabular / hierarchical) with honest

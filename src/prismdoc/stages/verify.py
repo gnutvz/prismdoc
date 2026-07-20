@@ -135,7 +135,14 @@ def verify_field(
 
 
 class LabelVerifyStage(Stage):
-    """Verify cited field evidence sits near expected labels, not anti-labels."""
+    """Verify cited field evidence sits near expected labels, not anti-labels.
+
+    Run this on **layout-preserving** parse output (e.g. Docling markdown/tables), NOT on flattened OCR:
+    the label window is bounded per line, so a flattened document (no newlines) makes the window bleed into
+    adjacent labels and false-alarms (measured 100% -> 0% when the parse keeps layout; see
+    docs/VERIFICATION.md). Note: this checks the value's *line/region* has the right label; distinguishing
+    columns within one row (net vs. gross in a summary table) needs cell-level parsing (a later slice).
+    """
 
     name = "verify"
 

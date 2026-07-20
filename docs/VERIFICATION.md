@@ -43,14 +43,29 @@ column alignment), not just text. It also maps onto the **Tabular** archetype we
 **layout-preserving** parse output (its unit tests cover exactly that). It is shipped as infrastructure
 (the `field_verification` signal), not as a solved invoice check.
 
-## Slice 2 (next) — layout-aware region verification
+## Slice 2 (measured) — layout parse kills the false alarm
 
-The real fix is not a smarter text heuristic; it is verifying against **layout**:
+We re-ran the **exact same slice-1 verifier** but replaced the flattened `ocr_words` with a
+**layout-preserving parse** (Docling), on 12 invoices:
 
-- run a layout-preserving parser (Docling → blocks with bbox);
-- check the value's block/bbox falls in the **expected region/column** (e.g. under the `gross`/`total`
-  header, inside the summary block), not merely near a label in the character stream.
+| Parse input | False alarm (correct `total` flagged) |
+|---|---|
+| Flattened `ocr_words` | **43/43 = 100%** |
+| **Docling (layout)** | **0/12 = 0%** |
 
-First step (in progress): re-measure slice 1 on **layout-preserving OCR** to isolate how much of the
-false-alarm was the flattened input vs. the fundamental columnar limitation — then build bbox/column-region
-checks where text alone cannot decide.
+So the 100% false alarm was the **flattened input, not the verifier logic**. With layout, the value's line
+becomes a table row — `| total | $7,50 | $0,75 | $8,25 |` — where the `total` label is inline and the
+`net`/`VAT` column *headers* sit on a separate row, outside the window. No anti-label bleeds in, so correct
+totals verify. **Takeaway: run `LabelVerifyStage` on layout-preserving parse output, never on flattened OCR.**
+
+## Slice 3 (next) — column/cell awareness for tabular summaries
+
+Layout fixes the false alarm but **not** the original net-as-total catch. Look at the verified window:
+`| total | $7,50 | $0,75 | $8,25 |` — all three figures (net / VAT / gross) share the one `total` label, so
+a `total` value taken from the *net* column would also "verify". Distinguishing them is a **column**
+question: parse the summary into cells and check the value sits under the `gross`/`total` **column header**.
+That is tabular-archetype work (the summary block is a table), and the honest next slice.
+
+(Note: on the cleaner Docling text the model also made *far fewer* total errors than on the flattened OCR,
+so recall could not be measured on this subset — better parse both reduces the error and is required for
+the verifier. The columnar limitation above is structural, visible directly in the windows.)
