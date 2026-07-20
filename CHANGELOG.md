@@ -3,6 +3,15 @@
 All notable changes to prismdoc. Format loosely follows [Keep a Changelog]; versions are semver-ish
 while pre-1.0 (the public API may still change).
 
+## v0.5.1
+
+### Fixed
+- **Chunked and ensemble extraction now roll their sub-call cost into the parent ledger.** Each per-chunk
+  / per-model extraction ran on a temporary document whose `CostLedger` was discarded, so the parent
+  `doc.artifacts["cost"]` under-reported (or missed) the real spend. `CostLedger.merge()` +
+  `merge_cost(parent, child)` fold every sub-call's tokens/USD/stage costs into the parent, and both
+  stages now enforce `budget_usd` **across** their sub-calls (raising `BudgetExceededError` mid-loop).
+
 ## v0.5.0 — evidence, benchmarks & honest ablation
 
 ### Added

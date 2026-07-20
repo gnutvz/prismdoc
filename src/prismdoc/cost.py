@@ -80,6 +80,31 @@ class CostLedger(BaseModel):
         existing.unpriced = existing.unpriced or unpriced
         existing.unmetered = existing.unmetered or unmetered
 
+    def merge(self, other: CostLedger) -> None:
+        """Fold another ledger's totals and per-stage costs into this one.
+
+        Used to roll up per-chunk / per-model sub-extraction costs (run on temporary
+        documents) into the parent document's ledger, so the parent's total reflects
+        every LLM call actually made — not just the last stage's.
+        """
+        self.total_usd += other.total_usd
+        self.tokens_in += other.tokens_in
+        self.tokens_out += other.tokens_out
+        self.unpriced_calls += other.unpriced_calls
+        self.unmetered_calls += other.unmetered_calls
+        for stage, sc in other.by_stage.items():
+            existing = self.by_stage.get(stage)
+            if existing is None:
+                self.by_stage[stage] = sc.model_copy()
+                continue
+            if sc.usd is not None:
+                existing.usd = (existing.usd or 0.0) + sc.usd
+            existing.tokens_in += sc.tokens_in
+            existing.tokens_out += sc.tokens_out
+            existing.model = sc.model or existing.model
+            existing.unpriced = existing.unpriced or sc.unpriced
+            existing.unmetered = existing.unmetered or sc.unmetered
+
 
 def _resolve_pricing_key(
     model: str,
@@ -188,6 +213,14 @@ def record_unmetered(doc: Document, stage: str, model: str) -> None:
         unpriced=False,
         unmetered=True,
     )
+
+
+def merge_cost(parent: Document, child: Document) -> None:
+    """Fold a child (per-chunk / per-model) document's cost ledger into ``parent``."""
+    child_ledger = child.artifacts.get("cost")
+    if not isinstance(child_ledger, CostLedger):
+        return
+    _get_or_create_ledger(parent).merge(child_ledger)
 
 
 def check_budget(doc: Document, budget_usd: float) -> None:

@@ -170,3 +170,55 @@ def test_chunked_extract_exports_and_registry() -> None:
     assert "extract.chunked" in registry.get_keys()
     stage = registry.create("extract.chunked", schema=_product_schema())
     assert isinstance(stage, ChunkedExtractStage)
+
+
+import pytest  # noqa: E402
+
+from prismdoc.cost import BudgetExceededError, CostLedger, estimate_cost  # noqa: E402
+
+
+class PricedClient(LLMClient):
+    """Returns a distinct record per call WITH usage metadata (so cost is priced)."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def complete(
+        self, prompt: str, *, response_format: dict | None = None
+    ) -> Completion:
+        self.calls += 1
+        return Completion(
+            text='{"records": [{"name": "W", "sku": "S-%d"}]}' % self.calls,
+            usage={"prompt_tokens": 100, "completion_tokens": 10},
+            model="gpt-4o-mini",
+        )
+
+
+def _two_chunk_doc() -> Document:
+    # Each line exceeds max_chunk_chars=12, so it becomes its own chunk (2 chunks).
+    doc = Document(source=Source(path="/tmp/x.txt"))
+    doc.artifacts["parsed_markdown"] = "line one content\nline two content"
+    return doc
+
+
+def test_chunked_merges_per_chunk_cost_into_parent_ledger() -> None:
+    stage = ChunkedExtractStage(_product_schema(), client=PricedClient(), max_chunk_chars=12)
+    result = stage.run(_two_chunk_doc(), Context())
+
+    ledger = result.artifacts["cost"]
+    assert isinstance(ledger, CostLedger)
+    # Two chunks => two priced LLM calls rolled up into the parent.
+    assert ledger.tokens_in == 200
+    assert ledger.tokens_out == 20
+    per_call = estimate_cost("gpt-4o-mini", 100, 10)
+    assert ledger.total_usd == pytest.approx(2 * per_call)
+    assert "extract" in ledger.by_stage
+
+
+def test_chunked_enforces_budget_across_chunks() -> None:
+    # Budget sits between one and two calls' cost: the 2nd chunk pushes the parent over.
+    per_call = estimate_cost("gpt-4o-mini", 100, 10)
+    ctx = Context(options={"budget_usd": per_call * 1.5})
+    stage = ChunkedExtractStage(_product_schema(), client=PricedClient(), max_chunk_chars=12)
+    with pytest.raises(BudgetExceededError):
+        stage.run(_two_chunk_doc(), ctx)

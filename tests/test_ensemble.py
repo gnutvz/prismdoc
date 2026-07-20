@@ -156,3 +156,39 @@ def test_ensemble_exports_and_registry() -> None:
         ],
     )
     assert isinstance(stage, EnsembleExtractStage)
+
+
+from prismdoc.cost import CostLedger, estimate_cost  # noqa: E402
+
+
+class PricedClient(LLMClient):
+    """Canned record WITH usage metadata so the call is priced."""
+
+    def __init__(self, company: str) -> None:
+        self.company = company
+
+    def complete(
+        self, prompt: str, *, response_format: dict | None = None
+    ) -> Completion:
+        return Completion(
+            text=_record_json(self.company, 10.0),
+            usage={"prompt_tokens": 100, "completion_tokens": 10},
+            model="gpt-4o-mini",
+        )
+
+
+def test_ensemble_merges_every_model_cost_into_parent_ledger() -> None:
+    stage = EnsembleExtractStage(
+        _receipt_schema(),
+        clients=[PricedClient("ACME"), PricedClient("ACME"), PricedClient("ACME")],
+    )
+    doc = Document(source=Source(path="/tmp/x.txt"))
+    doc.artifacts["parsed_markdown"] = "ACME total 10.00"
+    result = stage.run(doc, Context())
+
+    ledger = result.artifacts["cost"]
+    assert isinstance(ledger, CostLedger)
+    # The ensemble pays for all three models — all three roll up into the parent.
+    assert ledger.tokens_in == 300
+    assert ledger.tokens_out == 30
+    assert ledger.total_usd == pytest.approx(3 * estimate_cost("gpt-4o-mini", 100, 10))

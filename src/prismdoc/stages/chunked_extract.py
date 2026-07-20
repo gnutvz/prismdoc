@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from prismdoc.cost import check_budget, merge_cost
 from prismdoc.models import Document, Record
 from prismdoc.registry import register
 from prismdoc.schema import TargetSchema
@@ -74,6 +75,7 @@ class ChunkedExtractStage(Stage):
         text = doc.artifacts.get("parsed_markdown") or doc.full_text
         chunks = chunk_text(str(text), self.max_chunk_chars)
 
+        budget = ctx.options.get("budget_usd")
         all_records: list[Record] = []
         for chunk in chunks:
             temp = Document(
@@ -82,6 +84,11 @@ class ChunkedExtractStage(Stage):
             )
             extracted = self._extractor.run(temp, ctx)
             all_records.extend(extracted.records)
+            # Roll the per-chunk LLM cost up into the parent ledger, then enforce
+            # the overall budget across chunks (each chunk runs on a fresh temp doc).
+            merge_cost(doc, extracted)
+            if budget is not None:
+                check_budget(doc, float(budget))
 
         records_before = len(all_records)
         merged = _dedup_records(all_records)

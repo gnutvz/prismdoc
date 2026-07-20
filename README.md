@@ -192,11 +192,16 @@ Done (v0.5.0) — evidence, benchmarks & honest ablation:
 - [x] Per-module ablation across two domains (receipts + invoices) — [docs/ABLATION.md](docs/ABLATION.md)
 - [x] Repair stale-artifact fix + rules `cannot_evaluate` vs `violation` split
 
+Done (v0.5.1):
+
+- [x] Merge per-chunk / per-model cost ledgers back into the parent document (chunked + ensemble now
+  roll every sub-call up into `doc.artifacts["cost"]` and enforce the budget across sub-calls)
+
 Next (still in-scope for a focused workflow service):
 
 - [ ] More parser/extractor engines behind the existing interfaces
 - [ ] Scale the benchmark further + per-provider cost/accuracy frontier
-- [ ] Merge per-chunk / per-model cost ledgers back into the parent document
+- [ ] Token-level provenance (per-token bbox IDs, beyond the current evidence-span lineage)
 
 Out of scope by design — see [Scope](#scope-a-focused-microservice-not-a-platform); these belong to
 whoever deploys prismdoc: async job queues, persistence/resume, multi-tenancy, review dashboards,

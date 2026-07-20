@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from prismdoc.cost import check_budget, merge_cost
 from prismdoc.models import Document, Record
 from prismdoc.registry import register
 from prismdoc.schema import TargetSchema
@@ -38,6 +39,7 @@ class EnsembleExtractStage(Stage):
 
     def run(self, doc: Document, ctx: Context) -> Document:
         text = doc.artifacts.get("parsed_markdown") or doc.full_text
+        budget = ctx.options.get("budget_usd")
         first_records: list[Record] = []
         for extractor in self._extractors:
             temp = Document(
@@ -49,6 +51,11 @@ class EnsembleExtractStage(Stage):
                 first_records.append(extracted.records[0])
             else:
                 first_records.append(Record(fields={}))
+            # Roll each model's LLM cost up into the parent ledger (ensemble pays
+            # for every model), then enforce the overall budget across models.
+            merge_cost(doc, extracted)
+            if budget is not None:
+                check_budget(doc, float(budget))
 
         field_types = {field.name: field.type for field in self.schema.fields}
         consensus_fields: dict[str, Any] = {}
