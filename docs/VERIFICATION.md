@@ -134,13 +134,23 @@ score — a grounded-but-wrong-column value is worse than an ungrounded one), *a
 reason `verification_mismatch`. So a confident-but-wrong grounded value (net-as-total would otherwise be
 `0.9`) is now scored low and flagged, feeding the same `low_confidence` list repair consumes.
 
-**Honest real-data caveat.** Measured on the 12 Docling invoices, the mismatch cap correctly ranks the
-wrong value below the right one (net → `0.2`, gross → higher). But it did NOT cleanly separate flagged vs.
-unflagged here, because these invoices use **European number formatting** (`8,25`, `57 483,07`) and the
-grounding matcher (`value_in_text`) does not yet match comma-decimals — so *every* number, including the
-correct gross, is scored `0.4` (ungrounded) and flagged. That is a separate **grounding-normalization gap**
-(not the wiring): on dot-formatted numbers the split is clean (grounded `0.9` for correct, capped `0.2` for
-mismatch, per the unit tests). Fixing locale-aware numeric grounding is the natural next step.
+Measured end-to-end on the 12 Docling invoices (inject `total = net` vs `total = gross`, run column verify
++ confidence):
+
+| Injected value | Confidence | Flagged low-confidence |
+|---|---|---|
+| gross (correct total) | **0.9** (grounded, verified) | **0/12** |
+| net (confident-but-wrong) | **0.2** (mismatch cap) | **10/12** |
+
+Clean separation: the correct total keeps high confidence and is never flagged, while the wrong-column
+value is capped and flagged. The 2 net misses are the `column_no_label` invoices (verifier didn't catch,
+so confidence isn't capped — never a false flag on the correct value).
+
+*This measurement first surfaced a separate bug:* the grounding matcher `value_in_text` did not match
+**locale number formats** (`8,25`, `57 483,07`, `1.767,34`), so on European invoices even the correct gross
+scored ungrounded and everything was flagged. Fixed — `value_in_text` is now locale-aware (US + EU) — which
+is what unlocked the clean split above. A good reminder that measuring the wiring end-to-end found a real
+bug the unit tests didn't.
 
 ## What's still open
 

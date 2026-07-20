@@ -38,3 +38,27 @@ def test_value_in_text_importable_from_prismdoc_matching() -> None:
     from prismdoc.matching import value_in_text as imported
 
     assert imported is value_in_text
+
+
+def test_value_in_text_locale_eu_comma_decimal() -> None:
+    assert value_in_text(8.25, "total 8,25 gross") is True
+    assert value_in_text(544.46, "$544,46") is True
+
+
+def test_value_in_text_locale_eu_dot_thousands_comma_decimal() -> None:
+    assert value_in_text(1767.34, "sum 1.767,34") is True
+
+
+def test_value_in_text_locale_space_thousands() -> None:
+    assert value_in_text(57483.07, "57 483,07") is True
+
+
+def test_value_in_text_locale_us_thousands_dot_decimal() -> None:
+    assert value_in_text(1234.56, "1,234.56") is True
+
+
+def test_value_in_text_locale_regressions() -> None:
+    assert value_in_text(12.5, "12.50") is True
+    assert value_in_text(8.25, "8.25") is True
+    assert value_in_text(125, "amount 1250") is False
+    assert value_in_text("ACME", "ACME Corp") is True

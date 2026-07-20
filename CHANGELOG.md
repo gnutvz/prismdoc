@@ -9,9 +9,15 @@ while pre-1.0 (the public API may still change).
 - **Verification-driven confidence.** A `label_mismatch` / `column_mismatch` field now caps its
   `ConfidenceStage` score at `0.2` (after calibration, below the flag threshold), reason
   `verification_mismatch` — so a confident-but-wrong grounded value (net-as-total, otherwise `0.9`) is
-  scored low and flagged, feeding the same `low_confidence` list. (Note: on European-formatted numbers the
-  grounding matcher does not yet match comma-decimals, which masks the split on such invoices — a separate
-  grounding-normalization gap, tracked in `docs/VERIFICATION.md`.)
+  scored low and flagged, feeding the same `low_confidence` list. End-to-end on real Docling invoices
+  (n=12): the correct gross stays `0.9` / unflagged (**0/12** false flags) while the wrong-column net is
+  capped `0.2` / flagged (**10/12**).
+
+### Fixed
+- **Locale-aware numeric grounding.** `value_in_text` now matches European / space-separated number formats
+  (`8,25`, `57 483,07`, `1.767,34`) in addition to US/dot formats, keeping the "no digit-soup" guard
+  (`125` ≠ inside `1250`). Previously every number on a European-formatted invoice scored ungrounded,
+  which flagged even correct values (surfaced by the confidence measurement above).
 - **Verification-driven repair (closes the confident-but-wrong loop).** `RepairStage` now triggers on a
   verification mismatch (`field_verification == "label_mismatch"` / `field_column_verification ==
   "column_mismatch"`), not only on missing/low-confidence fields, and passes the model a corrective hint
