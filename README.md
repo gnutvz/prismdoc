@@ -18,6 +18,13 @@ sub-pipeline, and three ways to run it (library, CLI, microservice).
 
 ![Architecture](docs/img/architecture.png)
 
+> **How this repo is built — measure everything, publish the negatives.** Every claim here is measured on
+> **public data with ground truth**, and the docs report what *didn't* work as loudly as what did: a module
+> that actively *hurts* accuracy ([ablation](docs/ABLATION.md)), a verifier that 100% false-alarmed before a
+> fix, and an error class that turned out to be rare in practice ([verification](docs/VERIFICATION.md)). If
+> you review one file to judge the engineering, read **[docs/VERIFICATION.md](docs/VERIFICATION.md)** — a
+> full measure → find the flaw → fix → re-measure investigation, null results included.
+
 ## Why prismdoc
 
 - **Cost-aware by design.** A cheap tier runs first; prismdoc escalates to a stronger, pricier tier
