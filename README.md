@@ -119,7 +119,13 @@ composes with whatever queue/store/observability stack you already run.
 
 ## Get started
 
-The offline path needs no API key. In three lines:
+As a library:
+
+```bash
+pip install prismdoc            # + extras: prismdoc[docling], [llm], [api]
+```
+
+Or clone and run the fully-offline demo (no API key needed) in three lines:
 
 ```bash
 pip install -e .
@@ -161,7 +167,10 @@ Full setup, YAML configuration, running as a service, and the dev/eval/benchmark
 
 ## Roadmap
 
-Done (v0.3.0):
+<details>
+<summary><strong>Done in v0.3.0–v0.4.0</strong> — foundation, reliability & auditability (click to expand)</summary>
+
+v0.3.0:
 
 - [x] Core pipeline, ingest/parse/extract/validate/normalize
 - [x] YAML config, CLI, FastAPI + Docker
@@ -174,7 +183,7 @@ Done (v0.3.0):
 - [x] LLM resilience (timeout + retry/backoff)
 - [x] Public SROIE benchmark: OCR-recall, multi-model extraction, cost/accuracy frontier
 
-Done (v0.4.0) — reliability & auditability:
+v0.4.0 — reliability & auditability:
 
 - [x] Confidence calibration map (measured on SROIE; `ConfidenceStage(calibration=...)`)
 - [x] Business-rule / cross-field validation (`subtotal + tax = total`, in-set, range…)
@@ -184,6 +193,8 @@ Done (v0.4.0) — reliability & auditability:
 - [x] Observability signals (per-stage latency, escalation/violation rates, tokens, cost)
 - [x] Long-document chunking (chunk → extract → merge/dedup)
 - [x] Model ensemble + disagreement flags
+
+</details>
 
 Done (v0.5.0) — evidence, benchmarks & honest ablation:
 
