@@ -19,6 +19,10 @@ _PDFPLUMBER_EXTRA_HINT = (
     "PdfPlumberParser requires the 'pdfplumber' extra: "
     "pip install 'prismdoc[pdfplumber]'"
 )
+_PYMUPDF4LLM_EXTRA_HINT = (
+    "PyMuPDF4LLMParser requires the 'pymupdf4llm' extra: "
+    "pip install 'prismdoc[pymupdf4llm]'"
+)
 
 
 class Parser(ABC):
@@ -125,6 +129,24 @@ class PdfPlumberParser(Parser):
         return "\n\n".join(sections)
 
 
+class PyMuPDF4LLMParser(Parser):
+    """Optional pymupdf4llm-backed parser (fast PDF → markdown).
+
+    Requires the ``pymupdf4llm`` extra. Builds on the core PyMuPDF dependency;
+    returns markdown (text + tables) via ``pymupdf4llm.to_markdown``.
+    """
+
+    name = "pymupdf4llm"
+
+    def parse(self, doc: Document) -> str:
+        try:
+            import pymupdf4llm
+        except ImportError as exc:
+            raise ImportError(_PYMUPDF4LLM_EXTRA_HINT) from exc
+
+        return pymupdf4llm.to_markdown(doc.source.path)
+
+
 class ParseStage(Stage):
     """Run a Parser and store the result in ``doc.artifacts["parsed_markdown"]``."""
 
@@ -143,10 +165,14 @@ def register_plugins() -> None:
     register("parser.passthrough", PassthroughParser)
     register("parser.docling", DoclingParser)
     register("parser.pdfplumber", PdfPlumberParser)
+    register("parser.pymupdf4llm", PyMuPDF4LLMParser)
     register("parse.default", ParseStage)
     register("parse.passthrough", lambda: ParseStage(parser=PassthroughParser()))
     register("parse.docling", lambda: ParseStage(parser=DoclingParser()))
     register("parse.pdfplumber", lambda: ParseStage(parser=PdfPlumberParser()))
+    register(
+        "parse.pymupdf4llm", lambda: ParseStage(parser=PyMuPDF4LLMParser())
+    )
 
 
 register_plugins()

@@ -6,8 +6,10 @@ while pre-1.0 (the public API may still change).
 ## Unreleased
 
 ### Added
-- **Parser is a swappable provider** — added `PdfPlumberParser` (born-digital PDF text + tables, extra
-  `prismdoc[pdfplumber]`) alongside Docling/passthrough, registered as `parse.pdfplumber`. The same
+- **Parser is a swappable provider** — added `PdfPlumberParser` (extra `prismdoc[pdfplumber]`) and
+  `PyMuPDF4LLMParser` (extra `prismdoc[pymupdf4llm]`) alongside Docling/passthrough, registered as
+  `parse.pdfplumber` / `parse.pymupdf4llm`. Validated end-to-end: the same bordered-table PDF through
+  pdfplumber and pymupdf4llm both feed `verify.column` with identical gross/net discrimination. The same
   `parse → verify → repair → normalize` pipeline runs by changing one config line; a cloud provider
   (Textract / Azure DI / Google Doc AI) is added by implementing the one-method `Parser` interface.
   Verified end-to-end: a real bordered-table PDF → pdfplumber → markdown table → `verify.column`

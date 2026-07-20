@@ -32,8 +32,8 @@ them:
 
 Plug in your own OCR / table / VLM engine; prismdoc adds the routing, quality, and auditability layer that
 turns a raw extractor into a trustworthy pipeline. This is real, not a slogan: the **parser is a swappable
-provider** — the same `parse → verify → repair → normalize` pipeline runs on **Docling** or **pdfplumber**
-by changing one config line (`parse.docling` → `parse.pdfplumber`); a cloud provider is added by
+provider** — the same `parse → verify → repair → normalize` pipeline runs on **Docling**, **pdfplumber**, or
+**pymupdf4llm** by changing one config line (`parse.docling` → `parse.pdfplumber`); a cloud provider is added by
 implementing the one-method `Parser` interface. Every seam — parser, model, verifier, rule, scorer,
 loader — is documented in **[docs/EXTENDING.md](docs/EXTENDING.md)**.
 
@@ -131,7 +131,7 @@ always better. Full table and reasoning in **[docs/ABLATION.md](docs/ABLATION.md
 | **Schema-driven extraction** | `TargetSchema` → LLM (via litellm) → validated `Record`s |
 | **Figure sub-pipeline** | Extract images → `[[FIGURE:id]]` placeholder → process → merge back |
 | **Ingest** | PDF (PyMuPDF), images (Pillow), spreadsheets (openpyxl) |
-| **Parse** | Swappable engine by config: Passthrough (offline), Docling OCR, or pdfplumber — add a cloud provider (Textract / Azure DI / Google Doc AI) by implementing the `Parser` interface |
+| **Parse** | Swappable engine by config: Passthrough (offline), Docling OCR, pdfplumber, or pymupdf4llm — add a cloud provider (Textract / Azure DI / Google Doc AI) by implementing the `Parser` interface |
 | **Validate + Normalize** | Required-field checks, type coercion, whitespace/dedup cleanup |
 | **Confidence per field** | Per-field confidence + low-confidence flags in the output |
 | **Cost ledger** | Real per-stage token/USD accounting + optional per-request budget |

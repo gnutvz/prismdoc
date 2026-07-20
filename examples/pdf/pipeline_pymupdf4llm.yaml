@@ -1,0 +1,12 @@
+# Same pipeline as the Docling / pdfplumber PDF examples — the ONLY difference is
+# the parser engine (parse.pymupdf4llm). Downstream stages are unchanged: proof
+# that the parser is a swappable provider.
+schema:
+  fields:
+    - {name: total, type: number, required: true}
+    - {name: description, type: string}
+pipeline:
+  - ingest.default
+  - parse.pymupdf4llm
+  - extract.default: {model: gpt-4o-mini}
+  - verify.column
