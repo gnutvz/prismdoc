@@ -6,6 +6,12 @@ while pre-1.0 (the public API may still change).
 ## Unreleased
 
 ### Added
+- **Verification-driven repair (closes the confident-but-wrong loop).** `RepairStage` now triggers on a
+  verification mismatch (`field_verification == "label_mismatch"` / `field_column_verification ==
+  "column_mismatch"`), not only on missing/low-confidence fields, and passes the model a corrective hint
+  ("re-read this from the correct column, not a net/subtotal column"). End-to-end on real Docling invoices
+  (n=12): of the net-as-total errors the verifier caught, repair fixed **10/10** back to the true gross.
+  Stale-snapshot safe (a field repaired via a mismatch is not re-triggered on later rounds).
 - **Semantic verification, slice 3 — column verification** (`TableColumnVerifyStage`) — parses the
   markdown table around a value, finds which **column** the value is in, and checks that column's header
   (`Record.field_column_verification`). Measured on real Docling invoice tables (n=12): a `total` fed the

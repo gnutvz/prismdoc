@@ -1,4 +1,4 @@
-"""Repair stage: re-prompt the LLM for only failed (missing / low-confidence) fields."""
+"""Repair stage: re-prompt the LLM for failed (missing / low-confidence / mismatch) fields."""
 
 from __future__ import annotations
 
@@ -11,6 +11,12 @@ from prismdoc.schema import FieldSpec, TargetSchema
 from prismdoc.stages.base import Context, Stage
 from prismdoc.stages.extract import LLMClient, LiteLLMClient, _parse_records_json
 from prismdoc.stages.validate import _is_missing_or_empty
+
+_VERIFICATION_MISMATCH_HINT = (
+    "Its previous value looks like it was read from the wrong place (a different "
+    "column or section — e.g. a \"net\" / \"subtotal\" column instead of the final "
+    "total). Re-read it from the correct location/column."
+)
 
 
 class RepairStage(Stage):
@@ -34,13 +40,13 @@ class RepairStage(Stage):
         doc: Document,
         already_repaired: set[str],
     ) -> list[str]:
-        """Return schema field names that are missing/empty or low-confidence.
+        """Return schema field names that are missing/empty, low-confidence, or mismatch.
 
-        The ``low_confidence`` artifact is a snapshot from the pre-repair
-        ConfidenceStage; it is NOT recomputed here. So a field already repaired
-        in an earlier round must not be re-selected via that stale signal —
-        ``already_repaired`` excludes it. The missing/empty check stays live each
-        round (if a repair failed to fill a required field, it is retried).
+        The ``low_confidence`` artifact and verification status dicts are snapshots
+        from pre-repair stages; they are NOT recomputed here. So a field already
+        repaired in an earlier round must not be re-selected via those stale
+        signals — ``already_repaired`` excludes it. The missing/empty check stays
+        live each round (if a repair failed to fill a required field, it is retried).
         """
         schema_names = set(self.schema.field_names())
         failed: list[str] = []
@@ -72,6 +78,20 @@ class RepairStage(Stage):
                     failed.append(field)
                     seen.add(field)
 
+        for f in self.schema.field_names():
+            mismatch = (
+                record.field_verification.get(f) == "label_mismatch"
+                or record.field_column_verification.get(f) == "column_mismatch"
+            )
+            if (
+                mismatch
+                and f in schema_names
+                and f not in seen
+                and f not in already_repaired
+            ):
+                failed.append(f)
+                seen.add(f)
+
         return failed
 
     def run(self, doc: Document, ctx: Context) -> Document:
@@ -86,8 +106,17 @@ class RepairStage(Stage):
                 failed = self._failed_fields(record, doc, already_repaired)
                 if not failed:
                     break
+                hints: dict[str, str] = {
+                    f: _VERIFICATION_MISMATCH_HINT
+                    for f in failed
+                    if (
+                        record.field_verification.get(f) == "label_mismatch"
+                        or record.field_column_verification.get(f)
+                        == "column_mismatch"
+                    )
+                }
                 specs = [s for s in self.schema.fields if s.name in failed]
-                prompt = _build_repair_prompt(str(text), record, specs)
+                prompt = _build_repair_prompt(str(text), record, specs, hints)
                 completion = self.client.complete(prompt)
                 parsed = _parse_records_json(completion.text)
                 corrections = parsed[0] if parsed else {}
@@ -110,12 +139,15 @@ class RepairStage(Stage):
 
 
 def _build_repair_prompt(
-    text: str, record: Record, specs: list[FieldSpec]
+    text: str,
+    record: Record,
+    specs: list[FieldSpec],
+    hints: dict[str, str] | None = None,
 ) -> str:
     names = ", ".join(spec.name for spec in specs) or "(none)"
-    fields_desc = "\n".join(_describe_field(spec) for spec in specs) or (
-        "(no fields)"
-    )
+    fields_desc = "\n".join(
+        _describe_field(spec, hints) for spec in specs
+    ) or ("(no fields)")
     current = json.dumps(record.fields, ensure_ascii=False, default=str)
     return (
         "Some fields in an extracted record are missing or unreliable.\n"
@@ -133,10 +165,15 @@ def _build_repair_prompt(
     )
 
 
-def _describe_field(spec: FieldSpec) -> str:
+def _describe_field(
+    spec: FieldSpec, hints: dict[str, str] | None = None
+) -> str:
     req = "required" if spec.required else "optional"
     desc = spec.description.strip() or "(no description)"
-    return f"- {spec.name} ({spec.type}, {req}): {desc}"
+    line = f"- {spec.name} ({spec.type}, {req}): {desc}"
+    if hints and spec.name in hints:
+        line += f"  [hint: {hints[spec.name]}]"
+    return line
 
 
 def register_plugins() -> None:

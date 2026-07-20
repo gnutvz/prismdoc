@@ -190,3 +190,130 @@ def test_repair_stage_registered_and_importable() -> None:
     from prismdoc import RepairStage as Exported
 
     assert Exported is RepairStage
+
+
+def _invoice_schema() -> TargetSchema:
+    return TargetSchema(
+        fields=[
+            FieldSpec(
+                name="vendor",
+                type="string",
+                description="Vendor name",
+                required=True,
+            ),
+            FieldSpec(
+                name="total",
+                type="number",
+                description="Invoice total",
+                required=True,
+            ),
+        ]
+    )
+
+
+def _confident_doc(
+    fields: dict,
+    *,
+    field_verification: dict[str, str] | None = None,
+    field_column_verification: dict[str, str] | None = None,
+    text: str = "Invoice: Vendor Acme total 120.00 net 100.00",
+) -> Document:
+    record = Record(fields=dict(fields))
+    if field_verification is not None:
+        record.field_verification = dict(field_verification)
+    if field_column_verification is not None:
+        record.field_column_verification = dict(field_column_verification)
+    return Document(
+        source=Source(path="/tmp/x.md"),
+        pages=[Page(index=0, text=text)],
+        records=[record],
+        artifacts={"parsed_markdown": text},
+    )
+
+
+def test_column_mismatch_triggers_repair() -> None:
+    doc = _confident_doc(
+        {"vendor": "Acme", "total": 100.0},
+        field_column_verification={"total": "column_mismatch"},
+    )
+    client = FakeLLMClient(json.dumps({"total": 120.0}))
+    result = RepairStage(schema=_invoice_schema(), client=client).run(
+        doc, Context()
+    )
+
+    assert client.call_count == 1
+    assert result.records[0].fields["total"] == 120.0
+    assert result.artifacts["repair"] == [
+        {"record": 0, "round": 1, "fields": ["total"]}
+    ]
+
+
+def test_label_mismatch_triggers_repair() -> None:
+    doc = _confident_doc(
+        {"vendor": "Acme", "total": 100.0},
+        field_verification={"total": "label_mismatch"},
+    )
+    client = FakeLLMClient(json.dumps({"total": 120.0}))
+    result = RepairStage(schema=_invoice_schema(), client=client).run(
+        doc, Context()
+    )
+
+    assert client.call_count == 1
+    assert result.records[0].fields["total"] == 120.0
+    assert result.artifacts["repair"] == [
+        {"record": 0, "round": 1, "fields": ["total"]}
+    ]
+
+
+def test_verified_status_does_not_trigger_repair() -> None:
+    doc = _confident_doc(
+        {"vendor": "Acme", "total": 120.0},
+        field_column_verification={"total": "column_verified"},
+    )
+    client = FakeLLMClient(json.dumps({"total": 0}))
+    original = dict(doc.records[0].fields)
+    result = RepairStage(schema=_invoice_schema(), client=client).run(
+        doc, Context()
+    )
+
+    assert client.call_count == 0
+    assert result.records[0].fields == original
+    assert result.artifacts["repair"] == []
+
+
+def test_mismatch_repair_prompt_contains_hint() -> None:
+    doc = _confident_doc(
+        {"vendor": "Acme", "total": 100.0},
+        field_column_verification={"total": "column_mismatch"},
+    )
+    client = FakeLLMClient(json.dumps({"total": 120.0}))
+    RepairStage(schema=_invoice_schema(), client=client).run(doc, Context())
+
+    assert client.prompts
+    prompt = client.prompts[0]
+    # Hint is attached to the total field line.
+    total_line = next(
+        line for line in prompt.splitlines() if line.startswith("- total ")
+    )
+    assert "wrong" in total_line
+    assert "column" in total_line
+
+
+def test_mismatch_repaired_once_not_reselected_in_later_rounds() -> None:
+    """Verification dicts are a pre-repair snapshot and are never recomputed.
+    A column_mismatch field repaired in round 1 must NOT be re-selected in
+    later rounds (would burn extra LLM calls on an already-fixed field)."""
+    doc = _confident_doc(
+        {"vendor": "Acme", "total": 100.0},
+        field_column_verification={"total": "column_mismatch"},
+    )
+    client = FakeLLMClient(json.dumps({"total": 120.0}))
+    result = RepairStage(
+        schema=_invoice_schema(), client=client, max_rounds=3
+    ).run(doc, Context())
+
+    assert result.records[0].fields["total"] == 120.0
+    assert client.call_count == 1
+    assert result.artifacts["repair"] == [
+        {"record": 0, "round": 1, "fields": ["total"]}
+    ]

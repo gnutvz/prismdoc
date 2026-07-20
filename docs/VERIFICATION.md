@@ -91,3 +91,31 @@ checks the value came from the *right column*, not merely that the number is pre
 The lesson mirrors the reviewer's thesis: region/record correctness needs **layout + positional
 (column) structure**, not text presence. On flattened OCR none of this is recoverable; on a
 layout-preserving parse the column header is exactly the missing signal.
+
+## Closing the loop — verification as a repair trigger
+
+Detection is only useful if it drives a fix. `RepairStage` previously re-prompted only *missing* or
+*low-confidence* fields — never a **confident-but-wrong** value (the exact class the column check catches).
+It now also triggers on a verification mismatch (`label_mismatch` / `column_mismatch`) and passes the model
+a corrective **hint** ("your previous value looks like it came from a *net*/*subtotal* column — re-read it
+from the correct column").
+
+End-to-end demo on real Docling invoices (n=12): inject the net-as-total error, run the column verifier,
+then repair:
+
+| Stage | Result |
+|---|---|
+| verifier caught the injected error (`column_mismatch`) | **10/12** |
+| repair fixed it back to the true gross total | **10/12** |
+| **fixed among caught** | **10/10 (100%)** |
+
+Every error the verifier caught, repair corrected — the 2 misses were `column_no_label` (never flagged, so
+never repaired, never wrongly "fixed"). This is the answer to "repair doesn't help confident-but-wrong":
+it does, once a semantic signal tells it *which* field is wrong and *why*.
+
+## What's still open
+
+- The column verifier needs a **layout-preserving parser** (Docling/table output); on flattened OCR it
+  falls back to `no_table`/`value_not_in_table` (honest, not a false verify).
+- Only `total` ships with column labels by default; other fields need their own `expect_col`/`reject_col`.
+- The 2 `column_no_label` misses want richer header handling (multi-item tables, merged summary blocks).
