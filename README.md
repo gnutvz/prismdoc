@@ -18,6 +18,21 @@ sub-pipeline, and three ways to run it (library, CLI, microservice).
 
 ![Architecture](docs/img/architecture.png)
 
+## What prismdoc competes on
+
+The extraction **engines** — OCR, table extraction, VLMs — are commodities: prismdoc **integrates** the
+best ones and lets you swap them. The value (and the moat) is the orchestration and quality layer around
+them:
+
+- **Routing** — cost-aware cascade (escalate only the hard cases) + archetype-based strategy selection.
+- **Normalization** — schema coercion, locale-aware numbers, cleanup/dedup into validated records.
+- **Verification** — did the value come from the *right place*? label/column checks, not just presence.
+- **Provenance** — evidence-first lineage: the model cites the source span, we locate it (never fabricate).
+- **Evaluation** — measured on public ground truth, honest ablation, null results published.
+
+Plug in your own OCR / table / VLM engine; prismdoc adds the routing, quality, and auditability layer that
+turns a raw extractor into a trustworthy pipeline.
+
 > **How this repo is built — measure everything, publish the negatives.** Every claim here is measured on
 > **public data with ground truth**, and the docs report what *didn't* work as loudly as what did: a module
 > that actively *hurts* accuracy ([ablation](docs/ABLATION.md)), a verifier that 100% false-alarmed before a
