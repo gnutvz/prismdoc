@@ -252,6 +252,14 @@ Done (v0.5.1):
 - [x] Merge per-chunk / per-model cost ledgers back into the parent document (chunked + ensemble now
   roll every sub-call up into `doc.artifacts["cost"]` and enforce the budget across sub-calls)
 
+Done (v0.7.0) — document middleware (providers & extensibility):
+
+- [x] Swappable **parser providers**: Docling / pdfplumber / pymupdf4llm (swap by config; cloud via `Parser`)
+- [x] **Model provider** `CliLLMClient` + **`.txt`/`.md` loader**; every seam documented in [docs/EXTENDING.md](docs/EXTENDING.md)
+- [x] **Document archetype** as a runtime abstraction (classifier + router dispatching the right verifier)
+- [x] **Evaluator** surface: accuracy + cost + latency (p50/p95) + review-rate + `--model`/`--parser` swap
+- [x] Verification layer wired into YAML config (`verify.*`, `archetype.router`)
+
 Done (v0.6.0) — semantic verification (right value vs. right place):
 
 - [x] Label/region + table-**column** verification (`verify.label` / `verify.column`) — catches a value

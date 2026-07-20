@@ -3,7 +3,7 @@
 All notable changes to prismdoc. Format loosely follows [Keep a Changelog]; versions are semver-ish
 while pre-1.0 (the public API may still change).
 
-## Unreleased
+## v0.7.0 — document middleware (providers & extensibility)
 
 ### Added
 - **More plugin adapters** — a `CliLLMClient` **model provider** (run extraction through any local CLI —
