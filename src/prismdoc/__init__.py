@@ -41,7 +41,7 @@ from prismdoc.stages.repair import RepairStage
 from prismdoc.stages.rules import RuleValidateStage, get_rule, register_rule
 from prismdoc.stages.table_extract import TableExtractStage
 from prismdoc.stages.validate import ValidateStage
-from prismdoc.stages.verify import LabelVerifyStage
+from prismdoc.stages.verify import LabelVerifyStage, TableColumnVerifyStage
 
 __version__ = "0.4.0"
 
@@ -81,6 +81,7 @@ __all__ = [
     "RuleValidateStage",
     "Source",
     "Stage",
+    "TableColumnVerifyStage",
     "TableExtractStage",
     "TargetSchema",
     "UnreadableDocumentError",

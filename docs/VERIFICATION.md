@@ -58,14 +58,36 @@ becomes a table row — `| total | $7,50 | $0,75 | $8,25 |` — where the `total
 `net`/`VAT` column *headers* sit on a separate row, outside the window. No anti-label bleeds in, so correct
 totals verify. **Takeaway: run `LabelVerifyStage` on layout-preserving parse output, never on flattened OCR.**
 
-## Slice 3 (next) — column/cell awareness for tabular summaries
+## Slice 3 (measured — it works) — column/cell verification
 
-Layout fixes the false alarm but **not** the original net-as-total catch. Look at the verified window:
-`| total | $7,50 | $0,75 | $8,25 |` — all three figures (net / VAT / gross) share the one `total` label, so
-a `total` value taken from the *net* column would also "verify". Distinguishing them is a **column**
-question: parse the summary into cells and check the value sits under the `gross`/`total` **column header**.
-That is tabular-archetype work (the summary block is a table), and the honest next slice.
+Layout fixed the false alarm but not the net-as-total *catch*: in `| total | 7,50 | 0,75 | 8,25 |` all
+three figures share one `total` label, so a value taken from the net column would also "verify".
+Distinguishing them is a **column** question. `TableColumnVerifyStage` parses the markdown table into cells,
+finds which **column** the value sits in, and checks that column's **header**: a `total` value under a
+`gross`/`total` header is `column_verified`; under a `net`/`subtotal`/`vat` header it is `column_mismatch`.
 
-(Note: on the cleaner Docling text the model also made *far fewer* total errors than on the flattened OCR,
-so recall could not be measured on this subset — better parse both reduces the error and is required for
-the verifier. The columnar limitation above is structural, visible directly in the windows.)
+Measured on **real Docling invoice tables** (n=12) by feeding each invoice's ground-truth **gross** (the
+true total) and **net** (the wrong column):
+
+| Fed value | Should be | Result |
+|---|---|---|
+| GROSS (true total) | `column_verified` | **12/12** |
+| NET (wrong column) | `column_mismatch` | **10/12** |
+| both correct (gross verified **and** net flagged) | | **10/12** |
+
+**The verifier catches the net-as-total confusion 10/12 while never mis-flagging the true total (12/12
+verified, 0 false alarms).** The 2 misses are `column_no_label` (the net value's column header did not map
+to a reject label) — a weak signal, never a false `verified`. This is the semantic-verification win: it
+checks the value came from the *right column*, not merely that the number is present.
+
+## The arc, in one table
+
+| Approach | False alarm on true total | Catches net-as-total |
+|---|---|---|
+| Label window, flattened OCR | 100% (43/43) | — (unusable) |
+| Label window + layout parse | 0% (0/12) | no (same row, one label) |
+| **Column verifier + layout parse** | **0% (0/12)** | **yes — 10/12** |
+
+The lesson mirrors the reviewer's thesis: region/record correctness needs **layout + positional
+(column) structure**, not text presence. On flattened OCR none of this is recoverable; on a
+layout-preserving parse the column header is exactly the missing signal.

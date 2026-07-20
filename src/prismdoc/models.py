@@ -60,6 +60,8 @@ class Record(BaseModel):
     field_evidence: dict[str, str] = Field(default_factory=dict)
     # Per-field semantic verification status (e.g. label/region checks).
     field_verification: dict[str, str] = Field(default_factory=dict)
+    # Per-field table-column verification status (e.g. gross vs net column).
+    field_column_verification: dict[str, str] = Field(default_factory=dict)
 
 
 class TraceEntry(BaseModel):
