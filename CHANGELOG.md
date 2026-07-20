@@ -3,6 +3,16 @@
 All notable changes to prismdoc. Format loosely follows [Keep a Changelog]; versions are semver-ish
 while pre-1.0 (the public API may still change).
 
+## Unreleased
+
+### Docs
+- **Honest organic-error measurement of the verification loop** (`docs/VERIFICATION.md`). Running the full
+  `extract → verify → confidence → repair` pipeline with a real cheap model on non-injected data:
+  single-item invoices 36/36, multi-item invoices 42/42, SROIE `total` 39/40 — i.e. **~0 organic
+  wrong-place errors**. Conclusion: verification is high-precision, low-recall **insurance** for a specific
+  high-stakes error (financial column confusion), caught+fixed when present but rare in normal operation;
+  it does not address OCR/text-field errors. Honest scope, measured.
+
 ## v0.6.0 — semantic verification (right value vs. right place)
 
 ### Added

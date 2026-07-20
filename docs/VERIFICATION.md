@@ -152,6 +152,33 @@ scored ungrounded and everything was flagged. Fixed — `value_in_text` is now l
 is what unlocked the clean split above. A good reminder that measuring the wiring end-to-end found a real
 bug the unit tests didn't.
 
+## How often does this fire in practice? (honest organic-error measurement)
+
+The catch/repair/confidence numbers above use **injected** net-as-total errors. The fair question is: how
+often does that error happen **organically**, and does the loop lift real accuracy? We ran the full
+pipeline (`extract → verify → confidence → repair`) with a real cheap model on data where models actually
+err — no injection:
+
+| Dataset | Field(s) | Accuracy before → after | Organic wrong-place errors |
+|---|---|---|---|
+| Invoices, single-item | total / subtotal / tax | 36/36 → 36/36 | 0 |
+| Invoices, multi-item (4–7 rows) | total / subtotal / tax | 42/42 → 42/42 | 0 |
+| SROIE receipts | total | 39/40 → 39/40 | 1 (a `RM 3.90` vs `3.9` ground-truth-formatting artifact — the prediction was right) |
+
+**Honest conclusion: the wrong-place error verification catches is rare organically.** On clean,
+well-labelled financial documents the model reads `total` / `net` / `gross` from the right column almost
+every time; the net-as-total confusion mainly shows up under **adversarial** conditions (an ambiguous
+schema + flattened OCR + a strong model over-reasoning — where we measured ~42% net-as-total). And the
+fields models *do* get wrong on receipts (company, address) are OCR/reading errors, which label/column
+verification is not designed to catch.
+
+So what is the verification layer worth? **High-precision, low-recall insurance for one specific,
+high-stakes error class** — financial column confusion (net vs. gross = wrong money). When it occurs it is
+caught and fixed (12/12 gross verified, 10/12 net flagged, 10/10 caught errors repaired, 0 false alarms),
+but it fires rarely, and it does not address OCR/text-field errors. That is the honest scope: a cheap
+guardrail against a catastrophic-but-rare mistake, not a general accuracy lifter. The bigger organic
+accuracy gains live in the parse/OCR layer and in the harder text fields — a separate line of work.
+
 ## What's still open
 
 - The column verifier needs a **layout-preserving parser** (Docling/table output); on flattened OCR it
