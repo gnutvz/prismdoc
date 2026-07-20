@@ -1,6 +1,6 @@
 # prismdoc
 
-**Cost-aware, schema-driven document extraction pipeline — deployable as a microservice.**
+**A cost-aware, schema-driven document-intelligence pipeline — deployable as a microservice.**
 
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -10,7 +10,7 @@
 prismdoc is an **orchestration layer** on top of existing extraction engines (OCR, layout, LLM/VLM).
 It turns messy documents — invoices, receipts, spec sheets, catalogs — into **clean, validated,
 structured records**, while spending money on expensive models **only when the cheap path isn't good
-enough**.
+enough**. The same pipeline handles flat records, visual/figure content, and mixed-modality documents today, with tabular and hierarchical archetypes on the roadmap.
 
 It is *not* another OCR/parsing engine. It plugs the good ones in (Docling, PyMuPDF, litellm-backed
 LLMs) and gives you the pipeline around them: routing, cost control, schema validation, a figure
@@ -28,6 +28,24 @@ sub-pipeline, and three ways to run it (library, CLI, microservice).
 - **Pluggable & declarative.** Every step is a `Stage` resolved from a registry; whole pipelines are
   declared in YAML. Swap an engine without touching code.
 - **Runs three ways.** Python library, `prismdoc` CLI, or a FastAPI + Docker microservice.
+
+## Document archetypes
+
+Every document is one — or a mix — of a few **archetypes**, and each wants a different sub-pipeline.
+prismdoc is built around that abstraction rather than around one document type: invoices and receipts
+are simply the first, best-benchmarked archetype. The engine (stage registry + YAML pipelines) is
+archetype-agnostic — adding an archetype is composing stages, not forking the framework.
+
+| Archetype | Example documents | Sub-pipeline | Status |
+|---|---|---|---|
+| **Flat** | invoice, receipt, form | parse → extract → validate | ✅ **Proven** — SROIE + invoice benchmarks, cost-aware cascade |
+| **Visual** | chart, diagram, infographic | OCR + figure→VLM → merge | ✅ **Proven** — +49-pt figure→VLM gain (InfographicVQA, n=200) |
+| **Mixed** | report / paper with text + figures | route text→text, figure→VLM, merge | ✅ **Case study** — composed pipeline recovers figure-only data |
+| **Tabular** | bank statement, catalog, line-items | parse → (table detect) → row extract → merge | 🟡 **Partial** — chunk→extract→merge works; a dedicated table detector/extractor is roadmap |
+| **Hierarchical** | contract, SOP, manual | chunk → section graph → cross-reference | ⬜ **Roadmap** — needs section / reference modeling beyond chunk-and-merge |
+
+Invoices/receipts remain the anchor because they have public ground truth (SROIE, CORD) and are easy to
+reproduce — proving *the framework works* before proving *breadth*.
 
 ---
 
@@ -210,6 +228,8 @@ Done (v0.5.1):
 
 Next (still in-scope for a focused workflow service):
 
+- [ ] **Tabular archetype** — a table detector/extractor + a public table benchmark (e.g. FinTabNet / bank statements)
+- [ ] **Hierarchical archetype** — section graph + cross-reference resolution for contracts / SOPs
 - [ ] More parser/extractor engines behind the existing interfaces
 - [ ] Scale the benchmark further + per-provider cost/accuracy frontier
 - [ ] Token-level provenance (per-token bbox IDs, beyond the current evidence-span lineage)
