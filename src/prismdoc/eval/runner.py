@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import math
+import time
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
 
+from prismdoc import registry
 from prismdoc.config import load_pipeline
 from prismdoc.cost import CostLedger
 from prismdoc.eval.dataset import EvalCase, EvalDataset
@@ -16,7 +19,7 @@ from prismdoc.pipeline import Pipeline
 from prismdoc.schema import TargetSchema
 from prismdoc.stages.base import Context, Stage
 from prismdoc.stages.cascade import CascadeStage
-from prismdoc.stages.extract import ExtractStage, LLMClient
+from prismdoc.stages.extract import ExtractStage, LiteLLMClient, LLMClient
 
 
 class CaseResult(BaseModel):
@@ -27,6 +30,8 @@ class CaseResult(BaseModel):
     router: Any | None = None
     tier: str | None = None
     cost: dict[str, Any] | None = None
+    latency_ms: float = 0.0
+    review_flagged: bool = False
 
 
 class EvalReport(BaseModel):
@@ -38,6 +43,9 @@ class EvalReport(BaseModel):
     per_field_accuracy: dict[str, float] = Field(default_factory=dict)
     escalation_count: int = 0
     total_usd: float = 0.0
+    latency_p50_ms: float = 0.0
+    latency_p95_ms: float = 0.0
+    review_rate: float = 0.0
 
 
 def run_case(
@@ -48,7 +56,9 @@ def run_case(
 ) -> CaseResult:
     """Run one case: pipeline → align → field metrics (+ router tier if present)."""
     doc = Document(source=Source(path=str(Path(case.input_path))))
+    started = time.perf_counter()
     doc = pipeline.run(doc, ctx)
+    latency_ms = (time.perf_counter() - started) * 1000.0
 
     predicted = [dict(record.fields) for record in doc.records]
     pairs = align_records(predicted, case.expected, case.key_field)
@@ -58,27 +68,42 @@ def run_case(
     tier = _tier_from_router(router)
     cost_raw = doc.artifacts.get("cost")
     cost = cost_raw.model_dump() if isinstance(cost_raw, CostLedger) else None
+    review_flagged = bool(doc.artifacts.get("low_confidence"))
     return CaseResult(
         input_path=case.input_path,
         metrics=metrics,
         router=router,
         tier=tier,
         cost=cost,
+        latency_ms=latency_ms,
+        review_flagged=review_flagged,
     )
 
 
 def run_eval(
     dataset: EvalDataset,
     client: LLMClient | None = None,
+    *,
+    model: str | None = None,
+    parser: str | None = None,
 ) -> EvalReport:
     """Load the dataset pipeline, run every case, and aggregate metrics.
 
     When ``client`` is provided it is injected into any ``ExtractStage`` in the
     pipeline (including cascade primary/fallback extract stages).
+
+    Optional ``model`` builds a ``LiteLLMClient`` and injects it the same way.
+    Optional ``parser`` replaces the top-level stage named ``\"parse\"`` with
+    ``registry.create(f\"parse.{parser}\")``.
     """
     pipeline, ctx = load_pipeline(dataset.config_path)
-    if client is not None:
-        _inject_client(pipeline.stages, client)
+    if parser is not None:
+        _swap_parser(pipeline.stages, parser)
+    inject = client
+    if model is not None:
+        inject = LiteLLMClient(model=model)
+    if inject is not None:
+        _inject_client(pipeline.stages, inject)
 
     schema = dataset.schema
     case_results: list[CaseResult] = []
@@ -86,6 +111,14 @@ def run_eval(
         case_results.append(run_case(pipeline, ctx, case, schema))
 
     return _aggregate(case_results, schema)
+
+
+def _swap_parser(stages: list[Stage], parser_name: str) -> None:
+    replacement = registry.create(f"parse.{parser_name}")
+    for index, stage in enumerate(stages):
+        if stage.name == "parse":
+            stages[index] = replacement
+            return
 
 
 def _inject_client(stages: list[Stage], client: LLMClient) -> None:
@@ -116,6 +149,15 @@ def _case_escalated(result: CaseResult) -> bool:
     )
 
 
+def _percentile_nearest_rank(values: list[float], percentile: float) -> float:
+    """Nearest-rank percentile; empty input → 0.0."""
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    rank = max(1, math.ceil(percentile / 100.0 * len(ordered)))
+    return ordered[rank - 1]
+
+
 def _aggregate(case_results: list[CaseResult], schema: TargetSchema) -> EvalReport:
     case_count = len(case_results)
     if case_count == 0:
@@ -126,6 +168,9 @@ def _aggregate(case_results: list[CaseResult], schema: TargetSchema) -> EvalRepo
             per_field_accuracy={name: 0.0 for name in schema.field_names()},
             escalation_count=0,
             total_usd=0.0,
+            latency_p50_ms=0.0,
+            latency_p95_ms=0.0,
+            review_rate=0.0,
         )
 
     mean_overall = (
@@ -160,6 +205,11 @@ def _aggregate(case_results: list[CaseResult], schema: TargetSchema) -> EvalRepo
             continue
         total_usd += float(result.cost.get("total_usd", 0.0))
 
+    latencies = [float(result.latency_ms) for result in case_results]
+    review_rate = (
+        sum(1 for result in case_results if result.review_flagged) / case_count
+    )
+
     return EvalReport(
         case_results=case_results,
         case_count=case_count,
@@ -167,4 +217,7 @@ def _aggregate(case_results: list[CaseResult], schema: TargetSchema) -> EvalRepo
         per_field_accuracy=per_field_accuracy,
         escalation_count=escalation_count,
         total_usd=total_usd,
+        latency_p50_ms=_percentile_nearest_rank(latencies, 50.0),
+        latency_p95_ms=_percentile_nearest_rank(latencies, 95.0),
+        review_rate=review_rate,
     )

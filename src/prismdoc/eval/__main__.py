@@ -22,11 +22,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         required=True,
         help="Path to an eval dataset JSON file",
     )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help="Override extract model (injects LiteLLMClient with this model)",
+    )
+    parser.add_argument(
+        "--parser",
+        default=None,
+        help="Override parse stage (registry key parse.<NAME>)",
+    )
     args = parser.parse_args(list(argv) if argv is not None else None)
 
     dataset_path = Path(args.dataset)
     dataset = load_dataset(dataset_path)
-    report = run_eval(dataset)
+    report = run_eval(dataset, model=args.model, parser=args.parser)
     _print_report(report, file=sys.stdout)
     return 0
 
@@ -37,6 +47,9 @@ def _print_report(report: EvalReport, *, file: TextIO) -> None:
     print(f"escalation_count: {report.escalation_count}", file=file)
     if report.total_usd or any(r.cost for r in report.case_results):
         print(f"total_usd: {report.total_usd:.6f}", file=file)
+    print(f"latency_p50_ms: {report.latency_p50_ms:.2f}", file=file)
+    print(f"latency_p95_ms: {report.latency_p95_ms:.2f}", file=file)
+    print(f"review_rate: {report.review_rate * 100:.2f}%", file=file)
     print(file=file)
 
     if not report.per_field_accuracy:

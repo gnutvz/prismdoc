@@ -6,6 +6,10 @@ while pre-1.0 (the public API may still change).
 ## Unreleased
 
 ### Added
+- **Evaluator surface** — `prismdoc-eval` now reports **latency (p50/p95)** and **review-rate** (fraction of
+  cases flagged low-confidence) alongside accuracy / escalation / cost, and takes `--model` and `--parser`
+  overrides so you can measure the *same dataset* across providers/models from one command. Reuses the
+  existing eval harness — one surface for accuracy + cost + latency + review-rate.
 - **Parser is a swappable provider** — added `PdfPlumberParser` (extra `prismdoc[pdfplumber]`) and
   `PyMuPDF4LLMParser` (extra `prismdoc[pymupdf4llm]`) alongside Docling/passthrough, registered as
   `parse.pdfplumber` / `parse.pymupdf4llm`. Validated end-to-end: the same bordered-table PDF through
