@@ -3,6 +3,20 @@
 All notable changes to prismdoc. Format loosely follows [Keep a Changelog]; versions are semver-ish
 while pre-1.0 (the public API may still change).
 
+## Unreleased
+
+### Added
+- **Semantic verification, slice 1** (`LabelVerifyStage`, `prismdoc.stages.verify`) — using the source
+  span the extractor cites per field (`Record.field_evidence`), verify it sits next to an expected label
+  and not an anti-label (a `total` value on a `net` line), emitting `Record.field_verification`. Shipped as
+  **infrastructure**, with an honest measured limitation: on real, flattened, *columnar* invoice summaries
+  it 100% false-alarms — text-window label proximity cannot resolve which column a number is in. See
+  [docs/VERIFICATION.md](docs/VERIFICATION.md); layout/bbox-aware verification is slice 2.
+
+### Docs
+- **Repositioned around document archetypes** (flat / visual / mixed / tabular / hierarchical) with honest
+  per-archetype status; invoices/receipts are the proven anchor, not the whole scope.
+
 ## v0.5.1
 
 ### Fixed

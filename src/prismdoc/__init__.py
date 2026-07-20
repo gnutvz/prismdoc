@@ -41,6 +41,7 @@ from prismdoc.stages.repair import RepairStage
 from prismdoc.stages.rules import RuleValidateStage, get_rule, register_rule
 from prismdoc.stages.table_extract import TableExtractStage
 from prismdoc.stages.validate import ValidateStage
+from prismdoc.stages.verify import LabelVerifyStage
 
 __version__ = "0.4.0"
 
@@ -64,6 +65,7 @@ __all__ = [
     "FigureProcessor",
     "HybridExtractStage",
     "IngestStage",
+    "LabelVerifyStage",
     "InputTooLargeError",
     "LLMClient",
     "Loader",

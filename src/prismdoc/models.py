@@ -58,6 +58,8 @@ class Record(BaseModel):
     # Exact source spans the extractor cited per field (evidence-first lineage);
     # populated by ExtractStage(evidence=True), consumed by ProvenanceStage.
     field_evidence: dict[str, str] = Field(default_factory=dict)
+    # Per-field semantic verification status (e.g. label/region checks).
+    field_verification: dict[str, str] = Field(default_factory=dict)
 
 
 class TraceEntry(BaseModel):
