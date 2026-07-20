@@ -3,6 +3,15 @@
 All notable changes to prismdoc. Format loosely follows [Keep a Changelog]; versions are semver-ish
 while pre-1.0 (the public API may still change).
 
+## Unreleased
+
+### Added
+- **Declarative policy engine** (`PolicyStage`, `policy.default`) — gate the pipeline on its accumulated
+  state: conditions (`min_confidence`, `max_total_usd`, `max_review_fields`, `has_rule_violations`) trigger
+  actions (`flag_review`, `tag`, `halt`). A `halt` records the reason in `doc.artifacts["policy"]` then
+  raises `PolicyHaltError` (e.g. a budget guard). Config-usable from YAML; terminal actions only (no
+  stage-triggering). Pure orchestration — the layer an engine can't give you.
+
 ## v0.7.0 — document middleware (providers & extensibility)
 
 ### Added
