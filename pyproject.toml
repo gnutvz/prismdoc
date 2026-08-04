@@ -21,12 +21,18 @@ classifiers = [
     "Intended Audience :: Developers",
 ]
 
-# Permissive only. PyMuPDF is deliberately NOT here — see the `pymupdf` extra.
+# Permissive only — this is what makes `pip install prismdoc` MIT-compatible.
+# PDF support is core rather than an extra because PDF is the format prismdoc
+# exists for; pdfplumber (MIT) reads text and geometry, pypdfium2
+# (Apache-2.0 / BSD-3, wrapping Google's PDFium) rasterises figures.
+# PyMuPDF is deliberately NOT here — see the `pymupdf` extra.
 dependencies = [
     "pydantic>=2.0,<3",
     "pillow>=10.0",
     "openpyxl>=3.1",
     "pyyaml>=6.0",
+    "pdfplumber>=0.11",
+    "pypdfium2>=4.0",
 ]
 
 [project.urls]
@@ -46,6 +52,7 @@ dev = [
     "httpx",
 ]
 docling = ["docling"]
+# Kept for compatibility; pdfplumber is now a core dependency.
 pdfplumber = ["pdfplumber>=0.11"]
 # ⚠️ AGPL-3.0. PyMuPDF and pymupdf4llm are dual-licensed by Artifex: AGPL for
 # open-source use, a paid commercial licence otherwise. Keeping them out of the
@@ -56,8 +63,8 @@ pdfplumber = ["pdfplumber>=0.11"]
 # AGPL / SSPL in the tree) cannot install prismdoc at all while PyMuPDF is a core
 # dependency, however permissive prismdoc's own code is.
 #
-# What needs it: the PDF loader (`ingest.py`) and figure extraction
-# (`figures.py`). Images and spreadsheets work without it.
+# Nothing requires this extra. It buys speed: `PyMuPDFEngine` is an alternative
+# to the permissive default in `prismdoc.pdf`, not a missing piece.
 pymupdf = ["pymupdf>=1.24"]
 pymupdf4llm = ["pymupdf>=1.24", "pymupdf4llm>=0.0.17"]
 llm = ["litellm"]

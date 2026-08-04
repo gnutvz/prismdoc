@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import builtins
+import re
 from pathlib import Path
 
 import fitz
@@ -89,8 +90,12 @@ def test_figure_extract_inserts_placeholder_and_stores_figure(
     figure = Figure.model_validate(figures[0])
     assert figure.id == "fig_0_0"
     assert figure.page_index == 0
-    assert figure.width == 32
-    assert figure.height == 24
+    # Dimensions describe the returned bytes, not the embedded asset. The default
+    # engine rasterises the figure's region of the page, so a 32x24 source placed
+    # in a 100x80pt box comes back larger — see prismdoc.pdf for why that is the
+    # behaviour worth having.
+    assert figure.width >= 32
+    assert figure.height >= 24
     assert figure.mime.startswith("image/")
     assert base64.b64decode(figure.image_b64)
     assert figure.result is None
@@ -109,7 +114,9 @@ def test_figure_process_stub_sets_result(tmp_path: Path) -> None:
 
     result = FigureProcessStage().run(doc, Context())
     figure = Figure.model_validate(result.artifacts["figures"][0])
-    assert figure.result == "[figure fig_0_0: 32x24 image/png]"
+    # Dimensions come from the rendered figure, so match the shape of the stub
+    # output rather than pinning pixels the engine is free to choose.
+    assert re.fullmatch(r"\[figure fig_0_0: \d+x\d+ image/png\]", figure.result)
 
 
 def test_figure_merge_replaces_placeholder(tmp_path: Path) -> None:
@@ -132,7 +139,7 @@ def test_figure_merge_replaces_placeholder(tmp_path: Path) -> None:
     result = FigureMergeStage().run(doc, Context())
     md = result.artifacts["parsed_markdown"]
     assert "[[FIGURE:" not in md
-    assert "[figure fig_0_0: 32x24 image/png]" in md
+    assert re.search(r"\[figure fig_0_0: \d+x\d+ image/png\]", md)
     assert "Catalog page with a figure" in md
 
 
@@ -156,11 +163,10 @@ def test_full_figure_pipeline_round_trip(tmp_path: Path) -> None:
     ).run(after_extract, Context())
     md = result.artifacts["parsed_markdown"]
     assert "[[FIGURE:" not in md
-    assert "[figure fig_0_0: 40x30 image/png]" in md
+    rendered = re.search(r"\[figure fig_0_0: \d+x\d+ image/png\]", md)
+    assert rendered
     # Result appears in the page-0 section (after original text).
-    assert md.index("Catalog page with a figure") < md.index(
-        "[figure fig_0_0: 40x30 image/png]"
-    )
+    assert md.index("Catalog page with a figure") < rendered.start()
 
 
 def test_figure_less_text_pdf_passthrough(tmp_path: Path) -> None:

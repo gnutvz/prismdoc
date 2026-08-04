@@ -45,6 +45,20 @@ def metadata() -> dict:
     return tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
 
 
+@pytest.fixture(scope="module")
+def pdf_with_figure() -> Path:
+    """A committed PDF, not one generated in the test.
+
+    Every other PDF test here builds its fixture with PyMuPDF, which is fine for
+    a dev environment but useless in this file: a test proving PDF works without
+    PyMuPDF cannot use PyMuPDF to produce the PDF. Checking in a 5KB file is the
+    only way the claim means anything.
+    """
+    fixture = Path(__file__).parent / "fixtures" / "page_with_figure.pdf"
+    assert fixture.exists(), f"missing test fixture: {fixture}"
+    return fixture
+
+
 class TestCoreStaysPermissive:
     @pytest.mark.parametrize(("package", "extra"), COPYLEFT.items())
     def test_copyleft_package_is_not_a_core_dependency(self, metadata, package, extra):
@@ -81,25 +95,45 @@ def without_pymupdf(monkeypatch):
 
 
 class TestCoreOnlyInstallWorks:
+    """PDF must work on a permissive install, not merely fail politely.
+
+    An earlier version of this fix only made the AGPL import lazy, so a core-only
+    install imported cleanly and then raised the moment it saw a PDF. That is not
+    a working install of a document-extraction tool — it just moves the failure.
+    """
+
     @pytest.mark.parametrize("module", PERMISSIVE_MODULES)
     def test_module_imports_without_pymupdf(self, without_pymupdf, module):
         """A top-level `import fitz` anywhere here makes the extra mandatory again."""
         importlib.import_module(module)
 
-    def test_pdf_loading_names_the_extra(self, without_pymupdf):
+    def test_the_default_engine_needs_no_extra(self, without_pymupdf):
+        pdf = importlib.import_module("prismdoc.pdf")
+        assert pdf.default_engine().name == "pdfplumber"
+
+    def test_pdf_pages_load_without_pymupdf(self, without_pymupdf, pdf_with_figure):
         ingest = importlib.import_module("prismdoc.stages.ingest")
         models = importlib.import_module("prismdoc.models")
 
-        with pytest.raises(ImportError, match=r"prismdoc\[pymupdf\]"):
-            ingest.PdfLoader().load(models.Source(path="anything.pdf"))
+        pages = ingest.PdfLoader().load(models.Source(path=str(pdf_with_figure)))
 
-    def test_figure_extraction_names_the_extra(self, without_pymupdf):
+        assert len(pages) == 1
+        assert "Catalog page" in pages[0].text
+        assert pages[0].blocks and pages[0].blocks[0].bbox is not None
+
+    def test_figures_extract_without_pymupdf(self, without_pymupdf, pdf_with_figure):
         figures = importlib.import_module("prismdoc.stages.figures")
 
-        with pytest.raises(ImportError, match=r"prismdoc\[pymupdf\]"):
-            figures._extract_pdf_figures("anything.pdf")
+        found, placeholders = figures._extract_pdf_figures(str(pdf_with_figure))
 
-    def test_the_error_says_why_it_is_optional(self, without_pymupdf):
-        """An operator hitting this needs to know it is a licence choice, not a bug."""
-        ingest = importlib.import_module("prismdoc.stages.ingest")
-        assert "AGPL" in ingest._PYMUPDF_EXTRA_HINT
+        assert len(found) == 1
+        assert placeholders == {0: ["fig_0_0"]}
+        assert found[0].image_b64
+
+    def test_the_agpl_engine_still_names_its_extra(self, without_pymupdf):
+        """Choosing it explicitly should explain why it is not already there."""
+        pdf = importlib.import_module("prismdoc.pdf")
+
+        with pytest.raises(ImportError, match=r"prismdoc\[pymupdf\]"):
+            pdf.PyMuPDFEngine().load_pages("anything.pdf")
+        assert "AGPL" in pdf._PYMUPDF_EXTRA_HINT

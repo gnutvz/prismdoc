@@ -5,6 +5,38 @@ while pre-1.0 (the public API may still change).
 
 ## Unreleased
 
+### Changed
+- **prismdoc is genuinely MIT now: PyMuPDF is out of the core dependencies.** It was in
+  `[project].dependencies`, and a consumer installs the tree rather than the code — so
+  `pip install prismdoc` was an AGPL-3.0 event no matter what LICENSE said. The concrete cost was
+  adoption: any consumer running the common "no GPL / AGPL / SSPL in the tree" gate could not install
+  prismdoc at all, however permissive its own code is.
+
+  PDF support stays **core**, on a permissive stack: **pdfplumber** (MIT, via pdfminer.six) for text and
+  geometry, **pypdfium2** (Apache-2.0 / BSD-3, Google's PDFium) for rasterising figures. Nothing needs an
+  extra. `prismdoc[pymupdf]` remains available as a faster alternative engine — an option, never a
+  missing piece.
+
+### Added
+- **`prismdoc.pdf` — one interface, swappable PDF engine** (`pdf.pdfplumber`, `pdf.pymupdf`), matching how
+  parsers already plug in. `PdfLoader(engine=...)` and `_extract_pdf_figures(engine=...)` take it; the
+  default is fixed rather than "whichever is installed", so a build's licence does not depend on what else
+  happened to be in the environment.
+- **Figures are rasterised per region, at their own resolution.** The default engine renders the area a
+  figure occupies rather than pulling its embedded stream: one consistent RGB PNG regardless of how the
+  source encoded it (no hand-decoding CCITT, JBIG2, CMYK JPEG or indexed colour), and it captures what the
+  figure looks like *on the page*. Scale comes from the embedded image's own pixel size, so a 600-DPI scan
+  placed in a small box is not silently downsampled — verified identical to PyMuPDF at native resolution.
+- **`tests/test_licensing.py`** — enforces the boundary instead of documenting it. Fails if a copyleft
+  package reappears in the core dependency list, and separately if any PDF path stops working with
+  PyMuPDF blocked. Uses a committed 5KB fixture, since a test proving PDF works without PyMuPDF cannot
+  use PyMuPDF to build the PDF.
+
+### Known limitation
+- Figure extraction finds **image XObjects only** — on both engines. A chart or schematic drawn as vector
+  paths is invisible to it. Detecting those is a layout-clustering problem, not an extraction one, and is
+  not attempted.
+
 ### Added
 - **Benchmark hub** (`prismdoc-bench-hub`, `prismdoc.bench.hub`) — declare a whole benchmark in one
   self-contained YAML (name + schema + pipeline + cases) and run it through the evaluator, no separate

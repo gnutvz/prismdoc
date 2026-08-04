@@ -4,25 +4,15 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from openpyxl import load_workbook
 from PIL import Image
 
 from prismdoc.errors import InputTooLargeError, UnreadableDocumentError
 from prismdoc.models import Block, Document, Page, Source
+from prismdoc.pdf import PdfEngine, default_engine
 from prismdoc.registry import register
 from prismdoc.stages.base import Context, Stage
-
-if TYPE_CHECKING:  # PyMuPDF is an optional extra — see _PYMUPDF_EXTRA_HINT.
-    import fitz
-
-_PYMUPDF_EXTRA_HINT = (
-    "PdfLoader requires the 'pymupdf' extra: pip install 'prismdoc[pymupdf]'. "
-    "It is optional because PyMuPDF is AGPL-3.0 (commercial licence available "
-    "from Artifex), and prismdoc's core install stays permissive. Images and "
-    "spreadsheets need no extra."
-)
 
 _IMAGE_EXTENSIONS: tuple[str, ...] = (
     ".png",
@@ -60,34 +50,22 @@ class Loader(ABC):
 
 
 class PdfLoader(Loader):
-    """Extract text and layout blocks from a PDF via PyMuPDF."""
+    """Extract text and layout blocks from a PDF.
+
+    The engine is injectable so a caller can trade the permissive default for
+    PyMuPDF's speed — see `prismdoc.pdf`. The default is fixed rather than
+    "whatever is installed", so a build's licence does not depend on what else
+    happened to be in the environment.
+    """
 
     name = "pdf"
     extensions: tuple[str, ...] = (".pdf",)
 
-    def load(self, source: Source) -> list[Page]:
-        try:
-            import fitz
-        except ImportError as exc:
-            raise ImportError(_PYMUPDF_EXTRA_HINT) from exc
+    def __init__(self, engine: PdfEngine | None = None) -> None:
+        self._engine = engine or default_engine()
 
-        path = source.path
-        try:
-            with fitz.open(path) as pdf:
-                if pdf.needs_pass:
-                    raise UnreadableDocumentError(
-                        f"Cannot read {path!r}: PDF is encrypted/password-protected"
-                    )
-                pages: list[Page] = []
-                for index, page in enumerate(pdf):
-                    text = page.get_text()
-                    blocks = _pdf_text_blocks(page)
-                    pages.append(Page(index=index, text=text, blocks=blocks))
-                return pages
-        except UnreadableDocumentError:
-            raise
-        except Exception as exc:
-            raise UnreadableDocumentError(f"Cannot read {path!r}: {exc}") from exc
+    def load(self, source: Source) -> list[Page]:
+        return self._engine.load_pages(source.path)
 
 
 class ImageLoader(Loader):
@@ -201,30 +179,6 @@ class IngestStage(Stage):
                 f"supported: {supported}"
             )
         return loader
-
-
-def _pdf_text_blocks(page: fitz.Page) -> list[Block]:
-    """Build Block list from PyMuPDF text dict (type 0 = text)."""
-    blocks: list[Block] = []
-    for raw in page.get_text("dict").get("blocks", []):
-        if raw.get("type") != 0:
-            continue
-        parts: list[str] = []
-        for line in raw.get("lines", []):
-            for span in line.get("spans", []):
-                parts.append(span.get("text", ""))
-        block_text = "".join(parts)
-        bbox_raw = raw.get("bbox")
-        bbox: tuple[float, float, float, float] | None = None
-        if bbox_raw is not None and len(bbox_raw) == 4:
-            bbox = (
-                float(bbox_raw[0]),
-                float(bbox_raw[1]),
-                float(bbox_raw[2]),
-                float(bbox_raw[3]),
-            )
-        blocks.append(Block(text=block_text, bbox=bbox))
-    return blocks
 
 
 def register_plugins() -> None:

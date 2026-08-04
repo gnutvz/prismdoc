@@ -10,17 +10,12 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from prismdoc.models import Document, Source
+from prismdoc.pdf import PdfEngine, default_engine
 from prismdoc.registry import register
 from prismdoc.stages.base import Context, Stage
 
 _FIGURE_TOKEN_RE = re.compile(r"\[\[FIGURE:([^\]]+)\]\]")
 _PAGE_HEADER_RE = re.compile(r"(?m)^## Page (\d+)\s*$")
-_PYMUPDF_EXTRA_HINT = (
-    "Figure extraction from PDF requires the 'pymupdf' extra: "
-    "pip install 'prismdoc[pymupdf]'. It is optional because PyMuPDF is AGPL-3.0 "
-    "(commercial licence available from Artifex), and prismdoc's core install "
-    "stays permissive. Figures embedded in image sources need no extra."
-)
 _DOCLING_EXTRA_HINT = (
     "OcrFigureProcessor requires OCR deps; install the 'docling' extra: "
     "pip install prismdoc[docling]"
@@ -179,42 +174,35 @@ def _bbox_from_rects(
 
 
 def _extract_pdf_figures(
-    path: str,
+    path: str, engine: PdfEngine | None = None
 ) -> tuple[list[Figure], dict[int, list[str]]]:
-    """Return figures and per-page ordered figure ids for placeholder insertion."""
-    try:
-        import fitz
-    except ImportError as exc:
-        raise ImportError(_PYMUPDF_EXTRA_HINT) from exc
+    """Return figures and per-page ordered figure ids for placeholder insertion.
+
+    The engine reads the PDF; this function owns the naming and ordering that the
+    placeholder tokens depend on. Ids stay `fig_<page>_<n>` with `n` counting
+    within a page, so a token in the markdown keeps pointing at the same figure
+    regardless of which engine produced it.
+    """
+    engine = engine or default_engine()
 
     figures: list[Figure] = []
     placeholders_by_page: dict[int, list[str]] = {}
-    with fitz.open(path) as pdf:
-        for page_index, page in enumerate(pdf):
-            try:
-                images = page.get_images(full=True)
-            except Exception:
-                continue
-            for n, img in enumerate(images):
-                try:
-                    xref = int(img[0])
-                    extracted = pdf.extract_image(xref)
-                    image_bytes = extracted["image"]
-                    fig_id = f"fig_{page_index}_{n}"
-                    rects = page.get_image_rects(xref)
-                    figure = Figure(
-                        id=fig_id,
-                        page_index=page_index,
-                        bbox=_bbox_from_rects(rects),
-                        width=int(extracted["width"]),
-                        height=int(extracted["height"]),
-                        image_b64=base64.b64encode(image_bytes).decode("ascii"),
-                        mime=_mime_for_ext(str(extracted.get("ext", "png"))),
-                    )
-                except Exception:
-                    continue
-                figures.append(figure)
-                placeholders_by_page.setdefault(page_index, []).append(fig_id)
+    for image in engine.extract_images(path):
+        page_index = image.page_index
+        on_page = placeholders_by_page.setdefault(page_index, [])
+        fig_id = f"fig_{page_index}_{len(on_page)}"
+        figures.append(
+            Figure(
+                id=fig_id,
+                page_index=page_index,
+                bbox=image.bbox,
+                width=image.width,
+                height=image.height,
+                image_b64=image.b64,
+                mime=image.mime,
+            )
+        )
+        on_page.append(fig_id)
     return figures, placeholders_by_page
 
 
