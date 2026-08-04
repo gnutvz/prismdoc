@@ -169,6 +169,9 @@ As a library:
 pip install prismdoc            # + extras: prismdoc[docling], [llm], [api]
 ```
 
+Core install is permissive-licensed. PDF page loading and figure extraction need
+`prismdoc[pymupdf]`, which is **AGPL-3.0** — see [License](#license).
+
 Or clone and run the fully-offline demo (no API key needed) in three lines:
 
 ```bash
@@ -284,3 +287,23 @@ metrics/OTel infrastructure.
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+Every core dependency is permissive, so `pip install prismdoc` carries no copyleft
+obligation. That is a deliberate constraint, not an accident: a consumer with an
+automated licence gate — no GPL / AGPL / SSPL in the dependency tree — has to be
+able to install prismdoc, and prismdoc's own MIT licence means nothing if
+installing it drags in copyleft three levels down.
+
+**One extra is not permissive.** `prismdoc[pymupdf]` (and `prismdoc[pymupdf4llm]`,
+which builds on it) installs PyMuPDF, dual-licensed by Artifex under **AGPL-3.0**
+or a paid commercial licence. It is opt-in because that is a licensing decision
+only the installer can make.
+
+| Want | Install | Licence |
+|---|---|---|
+| Images, spreadsheets | `prismdoc` | permissive |
+| PDF text and layout | `prismdoc[docling]` or `prismdoc[pdfplumber]` for parsing | permissive |
+| PDF page loading, figure extraction | `prismdoc[pymupdf]` | **AGPL-3.0** or commercial |
+
+The PDF paths raise `ImportError` naming the extra rather than failing at import
+time, so a permissive install is a working install for everything else.

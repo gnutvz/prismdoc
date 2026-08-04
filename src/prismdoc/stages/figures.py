@@ -7,7 +7,6 @@ import re
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-import fitz
 from pydantic import BaseModel
 
 from prismdoc.models import Document, Source
@@ -16,6 +15,12 @@ from prismdoc.stages.base import Context, Stage
 
 _FIGURE_TOKEN_RE = re.compile(r"\[\[FIGURE:([^\]]+)\]\]")
 _PAGE_HEADER_RE = re.compile(r"(?m)^## Page (\d+)\s*$")
+_PYMUPDF_EXTRA_HINT = (
+    "Figure extraction from PDF requires the 'pymupdf' extra: "
+    "pip install 'prismdoc[pymupdf]'. It is optional because PyMuPDF is AGPL-3.0 "
+    "(commercial licence available from Artifex), and prismdoc's core install "
+    "stays permissive. Figures embedded in image sources need no extra."
+)
 _DOCLING_EXTRA_HINT = (
     "OcrFigureProcessor requires OCR deps; install the 'docling' extra: "
     "pip install prismdoc[docling]"
@@ -177,6 +182,11 @@ def _extract_pdf_figures(
     path: str,
 ) -> tuple[list[Figure], dict[int, list[str]]]:
     """Return figures and per-page ordered figure ids for placeholder insertion."""
+    try:
+        import fitz
+    except ImportError as exc:
+        raise ImportError(_PYMUPDF_EXTRA_HINT) from exc
+
     figures: list[Figure] = []
     placeholders_by_page: dict[int, list[str]] = {}
     with fitz.open(path) as pdf:

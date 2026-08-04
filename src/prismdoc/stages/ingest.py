@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import fitz
 from openpyxl import load_workbook
 from PIL import Image
 
@@ -13,6 +13,16 @@ from prismdoc.errors import InputTooLargeError, UnreadableDocumentError
 from prismdoc.models import Block, Document, Page, Source
 from prismdoc.registry import register
 from prismdoc.stages.base import Context, Stage
+
+if TYPE_CHECKING:  # PyMuPDF is an optional extra — see _PYMUPDF_EXTRA_HINT.
+    import fitz
+
+_PYMUPDF_EXTRA_HINT = (
+    "PdfLoader requires the 'pymupdf' extra: pip install 'prismdoc[pymupdf]'. "
+    "It is optional because PyMuPDF is AGPL-3.0 (commercial licence available "
+    "from Artifex), and prismdoc's core install stays permissive. Images and "
+    "spreadsheets need no extra."
+)
 
 _IMAGE_EXTENSIONS: tuple[str, ...] = (
     ".png",
@@ -56,6 +66,11 @@ class PdfLoader(Loader):
     extensions: tuple[str, ...] = (".pdf",)
 
     def load(self, source: Source) -> list[Page]:
+        try:
+            import fitz
+        except ImportError as exc:
+            raise ImportError(_PYMUPDF_EXTRA_HINT) from exc
+
         path = source.path
         try:
             with fitz.open(path) as pdf:

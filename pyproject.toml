@@ -21,9 +21,9 @@ classifiers = [
     "Intended Audience :: Developers",
 ]
 
+# Permissive only. PyMuPDF is deliberately NOT here — see the `pymupdf` extra.
 dependencies = [
     "pydantic>=2.0,<3",
-    "pymupdf>=1.24",
     "pillow>=10.0",
     "openpyxl>=3.1",
     "pyyaml>=6.0",
@@ -47,7 +47,19 @@ dev = [
 ]
 docling = ["docling"]
 pdfplumber = ["pdfplumber>=0.11"]
-pymupdf4llm = ["pymupdf4llm>=0.0.17"]
+# ⚠️ AGPL-3.0. PyMuPDF and pymupdf4llm are dual-licensed by Artifex: AGPL for
+# open-source use, a paid commercial licence otherwise. Keeping them out of the
+# core dependencies is what lets `pip install prismdoc` stay MIT-compatible —
+# opting in is a licensing decision, so it has to be one the installer makes.
+#
+# This is not theoretical: a consumer with an automated licence gate (no GPL /
+# AGPL / SSPL in the tree) cannot install prismdoc at all while PyMuPDF is a core
+# dependency, however permissive prismdoc's own code is.
+#
+# What needs it: the PDF loader (`ingest.py`) and figure extraction
+# (`figures.py`). Images and spreadsheets work without it.
+pymupdf = ["pymupdf>=1.24"]
+pymupdf4llm = ["pymupdf>=1.24", "pymupdf4llm>=0.0.17"]
 llm = ["litellm"]
 viz = ["matplotlib"]
 
