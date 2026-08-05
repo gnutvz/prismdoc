@@ -5,6 +5,33 @@ while pre-1.0 (the public API may still change).
 
 ## Unreleased
 
+## v0.11.0 — diagrams that were drawn, not embedded
+
+### Added
+- **Vector figure detection**, opt-in via
+  `PdfPlumberEngine(detect_vector_figures=True)`. A schematic drawn with lines and
+  fills has no image XObject, so every other figure path is blind to it — which is
+  most technical drawings in most engineering PDFs.
+
+  **Off by default and staying that way.** Everything else here is extraction: the
+  figure is in the file or it is not. This is inference. A missed diagram costs one
+  diagram; a false positive costs a model call *and* puts a paragraph describing a
+  page border into the retrieval index, where it comes back as though it were
+  content. The asymmetry is why the filters are tuned to reject.
+
+  What it rejects, each with a test: ruled tables (subtracted via
+  `page.find_tables()` — tables are lines and rectangles too, and are the main
+  source of false hits), header and footer rules, page borders, lone boxes, icon
+  clusters, and pages dense enough to be maps or CAD exports.
+
+  Inferred regions are appended after a page's embedded images, so a guess never
+  renumbers an extraction whose id is already written into the Markdown.
+
+### Known limitation
+- Detection is heuristic and has no benchmark behind it — it is verified against
+  constructed fixtures, not a real corpus. Enable it on a sample and read the
+  counts before turning it loose on a large one.
+
 ## v0.10.0 — figures out of Word documents
 
 ### Added

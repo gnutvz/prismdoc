@@ -25,14 +25,16 @@ feeding an image to a vision model:
 - Resolution is chosen per figure from the embedded image's own pixel size, so a
   600-DPI scan placed in a small box is not silently downsampled.
 
-What it does **not** do — and neither does the PyMuPDF engine — is find figures
-drawn as vector paths. Both engines enumerate image XObjects, so a chart or
-schematic composed of lines and fills is invisible to figure extraction, however
-it is rendered. Detecting those means clustering page geometry, which is a layout
-problem rather than an extraction one, and is not attempted here.
-
 The cost is that rasterising is slower than copying bytes out, so only pages that
 actually carry figures are touched.
+
+Figures drawn as vector paths have no image XObject to enumerate, so they are
+invisible to all of the above. `PdfPlumberEngine(detect_vector_figures=True)`
+looks for them by clustering page geometry — see `_vector_regions`. It is off by
+default and stays that way: everything else here is extraction, where a figure
+either is in the file or is not, while this is inference that can be wrong in
+both directions, and a wrong guess costs a model call and a paragraph of noise in
+the retrieval index. The PyMuPDF engine does not implement it.
 
 Coordinates are top-left origin, y increasing downward, in PDF points — matching
 what PyMuPDF reports, so `Block.bbox` means the same thing whichever engine ran.
@@ -42,11 +44,14 @@ from __future__ import annotations
 
 import base64
 import io
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from prismdoc.errors import UnreadableDocumentError
 from prismdoc.models import Block, Page
+
+logger = logging.getLogger(__name__)
 
 # Floor for figure render scale. Vector diagrams have no native resolution to
 # match, so they get this: enough that a small schematic stays legible to a
@@ -57,6 +62,34 @@ FIGURE_RENDER_SCALE = 2.0
 # one pathological placement — a poster-sized image dropped into a page — without
 # constraining ordinary scans, which land far below it.
 MAX_FIGURE_PIXELS = 4000
+
+# --- Vector figure detection (opt-in) ----------------------------------------
+#
+# A schematic drawn with lines and fills has no image to extract, so it is
+# invisible to everything above. Finding it means guessing from page geometry,
+# and every constant here exists to make that guess conservative: a false
+# positive costs a model call and puts a paragraph about a page border into the
+# retrieval index, which is worse than missing a diagram.
+
+# Primitives a cluster must contain. Three is the smallest real diagram — two
+# boxes and a connector — so the bar cannot go higher without missing the shape
+# most architecture drawings take. It is also why the size and table filters
+# below carry most of the weight.
+MIN_VECTOR_PRIMITIVES = 3
+# Points. Smaller than this is an icon or a checkbox.
+MIN_VECTOR_SIDE = 40
+# Fraction of the page a cluster may cover. A full-page border merges everything
+# on the page into one "diagram"; refusing that is cheaper than untangling it.
+MAX_VECTOR_PAGE_FRACTION = 0.8
+# Points. Primitives closer than this are treated as parts of one drawing.
+VECTOR_CLUSTER_GAP = 18
+# A rule is long and flat: a header underline, a table edge, a page border. The
+# ratio is deliberately extreme so a genuinely wide, short diagram survives.
+RULE_ASPECT_RATIO = 25
+# Pages with more geometry than this are maps, dense charts or CAD exports. The
+# clustering is quadratic and the result on such a page is one giant blob, so
+# skipping is both faster and more accurate than trying.
+MAX_VECTOR_PRIMITIVES_PER_PAGE = 1500
 
 _PYMUPDF_EXTRA_HINT = (
     "The 'pymupdf' PDF engine requires the optional extra: "
@@ -102,9 +135,21 @@ class PdfEngine(ABC):
 
 
 class PdfPlumberEngine(PdfEngine):
-    """Permissive default: pdfplumber (MIT) + pypdfium2 (Apache-2.0 / BSD-3)."""
+    """Permissive default: pdfplumber (MIT) + pypdfium2 (Apache-2.0 / BSD-3).
+
+    Args:
+        detect_vector_figures: also return regions that *look like* drawings —
+            clusters of lines and fills with no embedded image behind them. Off
+            by default, and deliberately so: everything else this engine returns
+            is extraction, where a figure either is in the file or is not. This
+            is inference, it can be wrong in both directions, and being wrong
+            costs a model call plus a paragraph of noise in the index.
+    """
 
     name = "pdfplumber"
+
+    def __init__(self, detect_vector_figures: bool = False) -> None:
+        self.detect_vector_figures = detect_vector_figures
 
     def load_pages(self, path: str) -> list[Page]:
         pdfplumber = _import_pdfplumber()
@@ -135,12 +180,17 @@ class PdfPlumberEngine(PdfEngine):
                 try:
                     for index, page in enumerate(pdf.pages):
                         placements = list(page.images)
-                        if not placements:
-                            # Rendering is the expensive part — skip pages with
-                            # nothing to take out of them.
-                            continue
                         for placement in placements:
                             image = _render_figure(rendered[index], page, index, placement)
+                            if image is not None:
+                                images.append(image)
+
+                        if not self.detect_vector_figures:
+                            continue
+                        # Appended after the embedded images on the page, so an
+                        # inferred figure never renumbers an extracted one.
+                        for box in _vector_regions(page, placements):
+                            image = _render_region(rendered[index], page, index, box)
                             if image is not None:
                                 images.append(image)
                 finally:
@@ -306,6 +356,139 @@ def _figure_scale(placement: dict, width_pt: float, height_pt: float) -> float:
         scale = min(scale, MAX_FIGURE_PIXELS / longest_pt)
 
     return max(scale, 1.0)
+
+
+def _vector_regions(page, placements: list[dict]) -> list[tuple[float, float, float, float]]:
+    """Regions of the page that look like a drawing rather than layout.
+
+    The whole difficulty is that a table is also lines and rectangles, and so is
+    a page border, a header rule and an underline. pdfplumber can find tables, so
+    those come out by subtraction; the rest come out by shape and by the fact
+    that a drawing is a *cluster* — several primitives close together — while
+    layout furniture is isolated and long.
+
+    Returns bounding boxes, top-left origin, in points.
+    """
+    primitives = list(page.lines) + list(page.rects) + list(page.curves)
+    if not primitives or len(primitives) > MAX_VECTOR_PRIMITIVES_PER_PAGE:
+        if primitives:
+            logger.debug(
+                "Skipping vector detection on page %s: %d primitives",
+                page.page_number,
+                len(primitives),
+            )
+        return []
+
+    excluded = _table_boxes(page) + [_bbox(p) for p in placements]
+    page_area = float(page.width) * float(page.height)
+
+    boxes = [
+        box
+        for primitive in primitives
+        if not _is_rule(box := _primitive_box(primitive), page)
+        and not any(_contained(box, region) for region in excluded)
+    ]
+    if not boxes:
+        return []
+
+    regions: list[tuple[float, float, float, float]] = []
+    for cluster, members in _cluster(boxes):
+        if members < MIN_VECTOR_PRIMITIVES:
+            continue
+        width, height = cluster[2] - cluster[0], cluster[3] - cluster[1]
+        if width < MIN_VECTOR_SIDE or height < MIN_VECTOR_SIDE:
+            continue
+        if page_area and (width * height) / page_area > MAX_VECTOR_PAGE_FRACTION:
+            # Almost certainly a border or a background fill that swallowed the
+            # page. Describing it would describe the page, not a figure.
+            continue
+        regions.append(cluster)
+
+    if regions:
+        logger.debug("Page %s: %d vector region(s)", page.page_number, len(regions))
+    return regions
+
+
+def _cluster(boxes: list[tuple[float, float, float, float]]):
+    """Merge boxes that sit within `VECTOR_CLUSTER_GAP` of each other.
+
+    Yields `(bounding_box, member_count)`. Repeated passes rather than a proper
+    union-find: page counts are small once rules and tables are gone, and the
+    naive version is the one a reader can check.
+    """
+    clusters: list[tuple[tuple[float, float, float, float], int]] = [(b, 1) for b in boxes]
+
+    merged = True
+    while merged:
+        merged = False
+        result: list[tuple[tuple[float, float, float, float], int]] = []
+        for box, count in clusters:
+            for index, (other, other_count) in enumerate(result):
+                if _near(box, other):
+                    result[index] = (_union(box, other), other_count + count)
+                    merged = True
+                    break
+            else:
+                result.append((box, count))
+        clusters = result
+
+    return clusters
+
+
+def _primitive_box(primitive: dict) -> tuple[float, float, float, float]:
+    return (
+        float(primitive["x0"]),
+        float(primitive["top"]),
+        float(primitive["x1"]),
+        float(primitive["bottom"]),
+    )
+
+
+def _table_boxes(page) -> list[tuple[float, float, float, float]]:
+    try:
+        return [tuple(float(v) for v in table.bbox) for table in page.find_tables()]
+    except Exception:  # noqa: BLE001 — detection is best-effort, not required
+        return []
+
+
+def _is_rule(box: tuple[float, float, float, float], page) -> bool:
+    """A long flat line: header underline, table edge, page border."""
+    width, height = box[2] - box[0], box[3] - box[1]
+    if width <= 0 or height <= 0:
+        # A zero-thickness line is exactly what a rule is; judge it by length.
+        return max(width, height) > float(page.width) * 0.5
+    longest, shortest = max(width, height), min(width, height)
+    return shortest > 0 and longest / shortest > RULE_ASPECT_RATIO
+
+
+def _contained(box, region) -> bool:
+    return (
+        box[0] >= region[0] - 2
+        and box[1] >= region[1] - 2
+        and box[2] <= region[2] + 2
+        and box[3] <= region[3] + 2
+    )
+
+
+def _near(a, b) -> bool:
+    gap = VECTOR_CLUSTER_GAP
+    return not (
+        a[0] > b[2] + gap or a[2] < b[0] - gap or a[1] > b[3] + gap or a[3] < b[1] - gap
+    )
+
+
+def _union(a, b):
+    return (min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3]))
+
+
+def _render_region(rendered_page, page, page_index: int, box):
+    """Rasterise an inferred region. No `srcsize` to match, so use the floor."""
+    return _render_figure(
+        rendered_page,
+        page,
+        page_index,
+        {"x0": box[0], "top": box[1], "x1": box[2], "bottom": box[3]},
+    )
 
 
 def _bbox(placement: dict) -> tuple[float, float, float, float]:
