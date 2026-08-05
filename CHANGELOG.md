@@ -5,6 +5,37 @@ while pre-1.0 (the public API may still change).
 
 ## Unreleased
 
+## v0.9.0 — figures out of slide decks
+
+### Added
+- **PPTX figure extraction** (`prismdoc.ooxml`). A deck keeps its meaning in
+  pictures: parsed as text alone, a forty-slide architecture review yields forty
+  titles and nothing worth retrieving. `FigureExtractStage` now handles `.pptx`
+  alongside PDF.
+
+  No rasterising involved — a `.pptx` is a zip and each picture is stored as its
+  original file, so extraction is a read. The bytes are the asset at full stored
+  resolution, with no scaling decision to get wrong.
+
+- **Exact placement, which the PDF path cannot do.** Docling writes an
+  `<!-- image -->` marker where each picture sat, and walking the deck yields
+  pictures in that same document order, so figure text is substituted in place
+  rather than appended per page. When the counts disagree — docling marks
+  pictures the extractor skips — the surplus on either side is handled and
+  reported instead of silently dropped.
+
+- Template furniture is excluded: only pictures placed on slides, never on
+  layouts or the master. A logo described once per slide is forty model calls and
+  forty copies of one sentence in the index. Images below a size floor are
+  skipped for the same reason.
+
+python-pptx is not a new dependency; it arrives with docling, which is already
+required to read `.pptx` at all.
+
+### Known limitation
+- DOCX figures are not extracted yet — same approach applies, and `.docx` is the
+  obvious next format.
+
 ## v0.8.1 — prismdoc owns every format, and figures land where they belong
 
 ### Fixed

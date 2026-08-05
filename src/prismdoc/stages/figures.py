@@ -17,6 +17,9 @@ from prismdoc.stages.base import Context, Stage
 
 _FIGURE_TOKEN_RE = re.compile(r"\[\[FIGURE:([^\]]+)\]\]")
 _PAGE_HEADER_RE = re.compile(r"(?m)^## Page (\d+)\s*$")
+# Docling writes this where a picture sat. It is the only positional information
+# an Office file's Markdown carries, and it is exact — see _replace_image_markers.
+_IMAGE_MARKER_RE = re.compile(r"<!--\s*image\s*-->")
 
 logger = logging.getLogger(__name__)
 _DOCLING_EXTRA_HINT = (
@@ -84,17 +87,27 @@ class FigureExtractStage(Stage):
     name = "figures.extract"
 
     def run(self, doc: Document, ctx: Context) -> Document:
-        if not _is_pdf_source(doc.source):
+        kind = _figure_source_kind(doc.source)
+        if kind is None:
             doc.artifacts.setdefault("figures", [])
             return doc
 
-        figures, placeholders_by_page = _extract_pdf_figures(doc.source.path)
         markdown = doc.artifacts.get("parsed_markdown")
         if not isinstance(markdown, str):
             markdown = ""
-        doc.artifacts["parsed_markdown"] = _insert_placeholders(
-            markdown, placeholders_by_page
-        )
+
+        if kind == "pdf":
+            figures, placeholders_by_page = _extract_pdf_figures(doc.source.path)
+            markdown = _insert_placeholders(markdown, placeholders_by_page)
+        else:
+            # Office files carry exact positions: docling marks each picture's
+            # place in the Markdown, and the extractor yields pictures in that
+            # same order. So the tokens go where the pictures were rather than
+            # being appended per page.
+            figures, ordered_ids = _extract_office_figures(doc.source.path)
+            markdown = _replace_image_markers(markdown, ordered_ids)
+
+        doc.artifacts["parsed_markdown"] = markdown
         doc.artifacts["figures"] = [fig.model_dump() for fig in figures]
         return doc
 
@@ -154,6 +167,100 @@ def _is_pdf_source(source: Source) -> bool:
     if source.mime and source.mime.lower() == "application/pdf":
         return True
     return False
+
+
+def _figure_source_kind(source: Source) -> str | None:
+    """`"pdf"`, `"pptx"`, or None when the format carries no extractable figures.
+
+    The two kinds are genuinely different, not two paths to the same thing: a PDF
+    figure has to be rasterised out of a page, an Office picture is a file inside
+    a zip. They also differ in what they know about position, which is why the
+    placement strategies below are not shared.
+    """
+    if _is_pdf_source(source):
+        return "pdf"
+    if Path(source.path).suffix.lower() == ".pptx":
+        return "pptx"
+    return None
+
+
+def _extract_office_figures(path: str) -> tuple[list[Figure], list[str]]:
+    """Figures plus their ids, in the order the pictures appear in the document.
+
+    The order is load-bearing rather than incidental: `_replace_image_markers`
+    pairs the Nth id with the Nth marker docling wrote, so reordering here would
+    attach one picture's description to another's place with nothing to catch it.
+    """
+    from prismdoc.ooxml import extract_pptx_images
+
+    figures: list[Figure] = []
+    ordered_ids: list[str] = []
+    per_slide: dict[int, int] = {}
+
+    for image in extract_pptx_images(path):
+        seen = per_slide.get(image.page_index, 0)
+        per_slide[image.page_index] = seen + 1
+        fig_id = f"fig_{image.page_index}_{seen}"
+        figures.append(
+            Figure(
+                id=fig_id,
+                page_index=image.page_index,
+                bbox=image.bbox,
+                width=image.width,
+                height=image.height,
+                image_b64=image.b64,
+                mime=image.mime,
+            )
+        )
+        ordered_ids.append(fig_id)
+
+    return figures, ordered_ids
+
+
+def _replace_image_markers(markdown: str, ordered_ids: list[str]) -> str:
+    """Swap docling's `<!-- image -->` markers for figure tokens, in order.
+
+    Exact placement, which the PDF path cannot manage — there, figures are
+    positioned to the page and no finer.
+
+    The counts can disagree. Docling marks pictures this extractor skips, such as
+    a decorative rule below the size floor, and it can render a chart as an image
+    where python-pptx sees a graphic frame. Neither is worth failing over, so the
+    surplus on either side is handled and reported rather than silently dropped.
+    """
+    if not ordered_ids:
+        return markdown
+
+    markers = _IMAGE_MARKER_RE.findall(markdown)
+    if not markers:
+        logger.warning(
+            "No image markers in the parsed Markdown — appending %d figure(s) at the "
+            "end. Figure positions will not match the document.",
+            len(ordered_ids),
+        )
+        return markdown + _tokens_for(ordered_ids)
+
+    if len(markers) != len(ordered_ids):
+        logger.warning(
+            "Found %d image marker(s) but %d extracted figure(s); pairing in order and "
+            "handling the remainder.",
+            len(markers),
+            len(ordered_ids),
+        )
+
+    remaining = list(ordered_ids)
+
+    def _swap(_match: re.Match[str]) -> str:
+        if not remaining:
+            # More markers than figures: leave the marker rather than inventing a
+            # token that merge would render as "[unprocessed figure ...]".
+            return _match.group(0)
+        return f"[[FIGURE:{remaining.pop(0)}]]"
+
+    result = _IMAGE_MARKER_RE.sub(_swap, markdown)
+    if remaining:
+        result += _tokens_for(remaining)
+    return result
 
 
 def _mime_for_ext(ext: str) -> str:
