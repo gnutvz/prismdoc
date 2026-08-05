@@ -104,7 +104,7 @@ class FigureExtractStage(Stage):
             # place in the Markdown, and the extractor yields pictures in that
             # same order. So the tokens go where the pictures were rather than
             # being appended per page.
-            figures, ordered_ids = _extract_office_figures(doc.source.path)
+            figures, ordered_ids = _extract_office_figures(doc.source.path, kind)
             markdown = _replace_image_markers(markdown, ordered_ids)
 
         doc.artifacts["parsed_markdown"] = markdown
@@ -179,25 +179,28 @@ def _figure_source_kind(source: Source) -> str | None:
     """
     if _is_pdf_source(source):
         return "pdf"
-    if Path(source.path).suffix.lower() == ".pptx":
-        return "pptx"
+    suffix = Path(source.path).suffix.lower()
+    if suffix in (".pptx", ".docx"):
+        return suffix.lstrip(".")
     return None
 
 
-def _extract_office_figures(path: str) -> tuple[list[Figure], list[str]]:
+def _extract_office_figures(path: str, kind: str) -> tuple[list[Figure], list[str]]:
     """Figures plus their ids, in the order the pictures appear in the document.
 
     The order is load-bearing rather than incidental: `_replace_image_markers`
     pairs the Nth id with the Nth marker docling wrote, so reordering here would
     attach one picture's description to another's place with nothing to catch it.
     """
-    from prismdoc.ooxml import extract_pptx_images
+    from prismdoc.ooxml import extract_docx_images, extract_pptx_images
+
+    extract = extract_pptx_images if kind == "pptx" else extract_docx_images
 
     figures: list[Figure] = []
     ordered_ids: list[str] = []
     per_slide: dict[int, int] = {}
 
-    for image in extract_pptx_images(path):
+    for image in extract(path):
         seen = per_slide.get(image.page_index, 0)
         per_slide[image.page_index] = seen + 1
         fig_id = f"fig_{image.page_index}_{seen}"

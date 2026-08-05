@@ -32,6 +32,14 @@ logger = logging.getLogger(__name__)
 _PPTX_EXTRA_HINT = (
     "Reading .pptx needs the 'docling' extra: pip install 'prismdoc[docling]'"
 )
+_DOCX_EXTRA_HINT = (
+    "Reading .docx needs the 'docling' extra: pip install 'prismdoc[docling]'"
+)
+
+# OOXML namespaces. A picture reference is a <a:blip r:embed="rIdN"/>, wherever
+# it sits — inline in a run, or anchored with text wrapped around it.
+_BLIP = "{http://schemas.openxmlformats.org/drawingml/2006/main}blip"
+_EMBED = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
 
 # python-pptx reports geometry in English Metric Units. 914400 EMU to the inch,
 # 72 points to the inch — so points are EMU / 12700.
@@ -64,6 +72,59 @@ def extract_pptx_images(path: str) -> list[ExtractedImage]:
             if image is not None:
                 images.append(image)
     return images
+
+
+def extract_docx_images(path: str) -> list[ExtractedImage]:
+    """Every picture in the document body, in reading order.
+
+    The body only — headers, footers and footnotes are separate parts, and
+    docling writes no marker for them, so including them would shift every
+    pairing by the number of times a letterhead logo appears.
+
+    Walks the XML for `<a:blip>` rather than using `inline_shapes`, which sees
+    only inline pictures. An anchored image — one with text wrapped around it,
+    which is how most report figures are placed — is invisible to that API and
+    would be dropped while docling still marked its position.
+
+    `page_index` is 0 throughout: a .docx has no pages until something paginates
+    it, and inventing page numbers here would put a number in `Figure.page_index`
+    that means nothing.
+    """
+    document_type = _import_docx()
+
+    document = document_type(path)
+    images: list[ExtractedImage] = []
+    for element in document.element.body.iter(_BLIP):
+        rel_id = element.get(_EMBED)
+        if not rel_id:
+            # A blip can also carry r:link for an image referenced off-disk;
+            # there are no bytes to extract in that case.
+            continue
+        try:
+            part = document.part.related_parts[rel_id]
+        except KeyError:
+            logger.debug("Dangling image relationship %s", rel_id)
+            continue
+        images.append(_from_part(part))
+    return images
+
+
+def _from_part(part) -> ExtractedImage:
+    """One image part → ExtractedImage, with dimensions if they can be had."""
+    width = height = 0
+    try:
+        width, height = part.image.px_width, part.image.px_height
+    except Exception:  # noqa: BLE001 — dimensions are a nicety, the bytes are not
+        pass
+
+    return ExtractedImage(
+        page_index=0,
+        bbox=None,
+        width=int(width),
+        height=int(height),
+        data=part.blob,
+        mime=part.content_type or "image/png",
+    )
 
 
 def _walk(shapes):
@@ -130,3 +191,11 @@ def _import_pptx():
     except ImportError as exc:
         raise ImportError(_PPTX_EXTRA_HINT) from exc
     return Presentation
+
+
+def _import_docx():
+    try:
+        from docx import Document
+    except ImportError as exc:
+        raise ImportError(_DOCX_EXTRA_HINT) from exc
+    return Document

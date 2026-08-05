@@ -5,6 +5,27 @@ while pre-1.0 (the public API may still change).
 
 ## Unreleased
 
+## v0.10.0 — figures out of Word documents
+
+### Added
+- **DOCX figure extraction.** Same approach as `.pptx`: pictures are stored in the
+  zip as their original files, docling marks each one's place in the Markdown, and
+  the two are paired positionally. No rasterising, full stored resolution.
+
+  Two details this path has to get right, both of which fail as a silent
+  off-by-one rather than an error:
+
+  *Scope* — the document body only. Headers, footers and footnotes are separate
+  parts docling writes no marker for, so counting a letterhead logo would shift
+  every pairing after it.
+
+  *Reach* — anchored pictures count, not just inline ones. `inline_shapes` sees
+  only inline images, and a report figure with text wrapped around it is anchored;
+  extraction walks the XML for `<a:blip>` so both are found.
+
+  `page_index` is 0 throughout, because a `.docx` has no pages until something
+  paginates it and a made-up number would be worse than none.
+
 ## v0.9.0 — figures out of slide decks
 
 ### Added
