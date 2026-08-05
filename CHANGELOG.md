@@ -5,6 +5,17 @@ while pre-1.0 (the public API may still change).
 
 ## Unreleased
 
+## v0.8.0 — permissive by construction (and figures that survive it)
+
+The headline is licensing: prismdoc was MIT in name while shipping an AGPL-3.0
+core dependency, which made `pip install prismdoc` a copyleft event and locked
+out any consumer running a licence gate. PDF support is now permissive end to
+end, with no loss of capability — figures come back at the same resolution
+PyMuPDF gave.
+
+Also releases the benchmark hub, the review queue and the policy engine, which
+had been sitting unreleased.
+
 ### Changed
 - **prismdoc is genuinely MIT now: PyMuPDF is out of the core dependencies.** It was in
   `[project].dependencies`, and a consumer installs the tree rather than the code — so
