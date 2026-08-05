@@ -25,6 +25,10 @@ _IMAGE_EXTENSIONS: tuple[str, ...] = (
     ".tiff",
 )
 
+_DOCLING_EXTRA_HINT = (
+    "DOCX / PPTX / HTML need the 'docling' extra: pip install 'prismdoc[docling]'"
+)
+
 _MIME_TO_EXTENSION: dict[str, str] = {
     "application/pdf": ".pdf",
     "image/png": ".png",
@@ -34,6 +38,9 @@ _MIME_TO_EXTENSION: dict[str, str] = {
     "image/bmp": ".bmp",
     "image/tiff": ".tiff",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+    "text/html": ".html",
 }
 
 
@@ -124,6 +131,43 @@ class XlsxLoader(Loader):
             workbook.close()
 
 
+class OfficeLoader(Loader):
+    """DOCX / PPTX / HTML, via docling.
+
+    These have no native reader here, and should not get one. Docling already
+    reads them well — it runs a layout model over the OOXML and produces better
+    tables than a hand-rolled python-docx walk would. Reimplementing that would
+    put prismdoc in the business of owning format quirks, which is the opposite
+    of what it is for: orchestrating extraction engines rather than being one.
+
+    So the loader delegates, and exists mainly so `IngestStage` stops rejecting
+    the extension. Without it a consumer has to notice which formats prismdoc
+    handles and route the rest itself — a split that leaks prismdoc's internals
+    into everything that depends on it.
+
+    One page, because docling returns whole-document Markdown with no page
+    concept. Figure placement is per-document for these formats as a result; see
+    `stages/figures.py`.
+    """
+
+    name = "office"
+    extensions: tuple[str, ...] = (".docx", ".pptx", ".html", ".htm")
+
+    def load(self, source: Source) -> list[Page]:
+        try:
+            from docling.document_converter import DocumentConverter
+        except ImportError as exc:
+            raise ImportError(_DOCLING_EXTRA_HINT) from exc
+
+        path = source.path
+        try:
+            converted = DocumentConverter().convert(path)
+        except Exception as exc:
+            raise UnreadableDocumentError(f"Cannot read {path!r}: {exc}") from exc
+
+        return [Page(index=0, text=converted.document.export_to_markdown())]
+
+
 class TextLoader(Loader):
     """Load plain text / markdown files as a single page."""
 
@@ -149,6 +193,7 @@ class IngestStage(Stage):
             PdfLoader(),
             ImageLoader(),
             XlsxLoader(),
+            OfficeLoader(),
             TextLoader(),
         ]
         self._by_extension: dict[str, Loader] = {}
@@ -186,6 +231,7 @@ def register_plugins() -> None:
     register("loader.pdf", PdfLoader)
     register("loader.image", ImageLoader)
     register("loader.xlsx", XlsxLoader)
+    register("loader.office", OfficeLoader)
     register("loader.text", TextLoader)
     register("ingest.default", IngestStage)
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 import re
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -16,6 +17,8 @@ from prismdoc.stages.base import Context, Stage
 
 _FIGURE_TOKEN_RE = re.compile(r"\[\[FIGURE:([^\]]+)\]\]")
 _PAGE_HEADER_RE = re.compile(r"(?m)^## Page (\d+)\s*$")
+
+logger = logging.getLogger(__name__)
 _DOCLING_EXTRA_HINT = (
     "OcrFigureProcessor requires OCR deps; install the 'docling' extra: "
     "pip install prismdoc[docling]"
@@ -228,6 +231,20 @@ def _insert_placeholders(
         all_ids: list[str] = []
         for page_index in sorted(placeholders_by_page):
             all_ids.extend(placeholders_by_page[page_index])
+        # Placement needs page boundaries, and this markdown has none — so every
+        # figure lands at the end, a page-1 diagram included. Downstream that is
+        # a real quality loss rather than a cosmetic one: a chunker will pair the
+        # figure's text with whatever prose happens to end the document.
+        #
+        # Said out loud because the failure is otherwise invisible. The parser
+        # decides: PassthroughParser and PdfPlumberParser emit "## Page N";
+        # DoclingParser returns whole-document markdown with no page concept.
+        logger.warning(
+            "No page markers in the parsed markdown — appending %d figure(s) at the "
+            "end instead of on their own pages. Use a parser that emits '## Page N' "
+            "(passthrough, pdfplumber) for per-page placement.",
+            len(all_ids),
+        )
         return markdown + _tokens_for(all_ids)
 
     # Process pages from last to first so earlier offsets stay valid.

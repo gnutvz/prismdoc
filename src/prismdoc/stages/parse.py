@@ -132,7 +132,7 @@ class PdfPlumberParser(Parser):
 
         sections: list[str] = []
         with pdfplumber.open(doc.source.path) as pdf:
-            for page in pdf.pages:
+            for index, page in enumerate(pdf.pages):
                 parts: list[str] = []
                 text = page.extract_text()
                 if text:
@@ -142,6 +142,13 @@ class PdfPlumberParser(Parser):
                     if rendered:
                         parts.append(rendered)
                 if parts:
+                    # The page header is not decoration. FigureMergeStage locates
+                    # "## Page N" to put a figure's text back on the page it came
+                    # from; without it, every figure in the document is appended
+                    # at the end, so a diagram from page 1 gets chunked next to
+                    # page 40's prose. Emitting it here is what makes figure
+                    # placement work with this parser.
+                    parts.insert(0, f"## Page {index}")
                     sections.append("\n\n".join(parts))
         return "\n\n".join(sections)
 

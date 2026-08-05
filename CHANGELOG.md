@@ -5,6 +5,34 @@ while pre-1.0 (the public API may still change).
 
 ## Unreleased
 
+## v0.8.1 — prismdoc owns every format, and figures land where they belong
+
+### Fixed
+- **A page-1 figure was appended after the last page** whenever the parser did not
+  emit `## Page N` markers — which is every parser except `passthrough`. Extraction
+  and description both "worked"; only placement was wrong, so a chunker paired the
+  figure's text with unrelated prose and retrieval returned a diagram explanation
+  attached to the wrong subject. `PdfPlumberParser` now emits page markers, and the
+  merge stage **warns** when it has to fall back to appending, naming a parser that
+  would work. Docling returns whole-document Markdown with no page concept, so the
+  fallback stays — it just stopped being silent.
+
+### Added
+- **`ParserRouterStage`** — picks the parse engine from the document rather than
+  from config. `classify_source` labels a source and the route table maps it to a
+  registered `parse.*` provider; the decisive split is `pdf_digital` (pdfplumber
+  reads the text layer directly) vs `pdf_scan` (needs docling's layout model).
+  Routes are injectable and the chosen one is recorded in
+  `doc.artifacts["parser_route"]`.
+- **`OfficeLoader`** — DOCX, PPTX, HTML and HTM, delegated to docling (`docling`
+  extra). It deliberately does not reimplement OOXML reading: docling runs a layout
+  model and reads tables a hand-rolled walk would miss, and prismdoc's job is
+  orchestrating engines rather than being one. What it buys is that `IngestStage`
+  no longer rejects those extensions, so a consumer stops having to know which
+  formats prismdoc handles and route the rest itself.
+- `tests/test_figure_placement.py` — pins per-page placement, and that the degraded
+  path announces itself.
+
 ## v0.8.0 — permissive by construction (and figures that survive it)
 
 The headline is licensing: prismdoc was MIT in name while shipping an AGPL-3.0
