@@ -40,7 +40,13 @@ from prismdoc.stages.figures import (
 )
 from prismdoc.stages.ingest import IngestStage, Loader
 from prismdoc.stages.normalize import NormalizeStage
-from prismdoc.stages.parse import ParseStage, Parser, PassthroughParser
+from prismdoc.stages.parse import (
+    ParseStage,
+    Parser,
+    ParserRouterStage,
+    PassthroughParser,
+    classify_source,
+)
 from prismdoc.stages.policy import PolicyHaltError, PolicyStage
 from prismdoc.stages.provenance import ProvenanceStage
 from prismdoc.stages.repair import RepairStage
@@ -83,6 +89,7 @@ __all__ = [
     "Page",
     "ParseStage",
     "Parser",
+    "ParserRouterStage",
     "PassthroughParser",
     "Pipeline",
     "PolicyHaltError",
@@ -105,6 +112,7 @@ __all__ = [
     "char_validity",
     "chunk_text",
     "classify_archetype",
+    "classify_source",
     "cli_main",
     "document_metrics",
     "estimate_cost",

@@ -4,15 +4,32 @@ Cloud providers (AWS Textract, Azure Document Intelligence, Google Document AI,
 Unstructured, …) plug in the same way as Docling or pdfplumber: implement
 ``Parser.parse(doc) -> str`` and register the adapter under ``parser.*`` /
 ``parse.*``. One interface; swap the engine by config.
+
+``ParserRouterStage`` picks a ``parse.*`` provider from document type
+(``classify_source``), composing the registered parser engines.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 
-from prismdoc.models import Document
-from prismdoc.registry import register
+from prismdoc.models import Document, Source
+from prismdoc.registry import create, register
 from prismdoc.stages.base import Context, Stage
+
+_IMAGE_EXTENSIONS = frozenset(
+    {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp", ".webp"}
+)
+
+_DEFAULT_PARSER_ROUTES: dict[str, str] = {
+    "image_scan": "parse.docling",
+    "pdf_scan": "parse.docling",
+    "pdf_digital": "parse.pdfplumber",
+    "text": "parse.passthrough",
+    "spreadsheet": "parse.passthrough",
+    "unknown": "parse.passthrough",
+}
 
 _DOCLING_EXTRA_HINT = "Install the 'docling' extra: pip install prismdoc[docling]"
 _PDFPLUMBER_EXTRA_HINT = (
@@ -160,6 +177,50 @@ class ParseStage(Stage):
         return doc
 
 
+def classify_source(source: Source) -> str:
+    """Deterministic document-type label for parser routing."""
+    ext = Path(source.path).suffix.lower()
+    if ext in _IMAGE_EXTENSIONS:
+        return "image_scan"
+    if ext in {".txt", ".md"}:
+        return "text"
+    if ext == ".xlsx":
+        return "spreadsheet"
+    if ext == ".pdf":
+        try:
+            import fitz
+        except ImportError:
+            return "unknown"
+        try:
+            with fitz.open(source.path) as pdf:
+                for page in pdf:
+                    if page.get_text().strip():
+                        return "pdf_digital"
+            return "pdf_scan"
+        except Exception:
+            return "unknown"
+    return "unknown"
+
+
+class ParserRouterStage(Stage):
+    """Route to a ``parse.*`` provider based on ``classify_source``."""
+
+    name = "parse"
+
+    def __init__(self, routes: dict[str, str] | None = None) -> None:
+        self.routes = dict(routes) if routes is not None else dict(_DEFAULT_PARSER_ROUTES)
+
+    def run(self, doc: Document, ctx: Context) -> Document:
+        dt = classify_source(doc.source)
+        key = self.routes.get(dt) or self.routes.get(
+            "unknown", "parse.passthrough"
+        )
+        stage = create(key)
+        doc = stage.run(doc, ctx)
+        doc.artifacts["parser_route"] = {"doc_type": dt, "parser": key}
+        return doc
+
+
 def register_plugins() -> None:
     """Register default parsers and parse stage in the plugin registry."""
     register("parser.passthrough", PassthroughParser)
@@ -173,6 +234,7 @@ def register_plugins() -> None:
     register(
         "parse.pymupdf4llm", lambda: ParseStage(parser=PyMuPDF4LLMParser())
     )
+    register("parse.router", ParserRouterStage)
 
 
 register_plugins()
